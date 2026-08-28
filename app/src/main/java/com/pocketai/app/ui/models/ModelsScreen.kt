@@ -500,12 +500,21 @@ private fun CatalogModelCard(
             )
             Spacer(Modifier.height(8.dp))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Chip(model.tier.label)
+                Chip("~${model.estimatedTokensPerSecond} tok/s")
                 Chip(model.parametersLabel)
                 Chip(model.quantization)
                 Chip(ModelRepository.formatBytes(model.approxSizeBytes))
                 Chip("~${ModelRepository.formatBytes(model.estimatedRamBytes)} RAM")
                 if (model.supportsThinking) Chip("Reasoning")
             }
+            Text(
+                text = model.tier.summary +
+                    "  Speed is a flagship estimate; the benchmark screen measures your device.",
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 6.dp)
+            )
             if (fit != ModelFit.GOOD) {
                 Spacer(Modifier.height(8.dp))
                 FitWarning(fit, model)

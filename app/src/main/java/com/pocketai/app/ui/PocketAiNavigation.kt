@@ -9,6 +9,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.pocketai.app.data.repo.AppSettings
 import com.pocketai.app.ui.chat.ChatScreen
+import com.pocketai.app.ui.benchmark.BenchmarkScreen
+import com.pocketai.app.ui.benchmark.BenchmarkViewModel
 import com.pocketai.app.ui.chat.ChatViewModel
 import com.pocketai.app.ui.models.ModelsScreen
 import com.pocketai.app.ui.models.ModelsViewModel
@@ -26,6 +28,7 @@ object Routes {
     const val SETTINGS = "settings"
     const val PRIVACY = "privacy"
     const val LICENSES = "licenses"
+    const val BENCHMARK = "benchmark"
 }
 
 @Composable
@@ -65,7 +68,8 @@ fun PocketAiNavigation(settings: AppSettings) {
                 onBack = { navController.popBackStack() },
                 onOpenModels = { navController.navigate(Routes.MODELS) },
                 onOpenPrivacy = { navController.navigate(Routes.PRIVACY) },
-                onOpenLicenses = { navController.navigate(Routes.LICENSES) }
+                onOpenLicenses = { navController.navigate(Routes.LICENSES) },
+                onOpenBenchmark = { navController.navigate(Routes.BENCHMARK) }
             )
         }
         composable(Routes.PRIVACY) {
@@ -74,6 +78,10 @@ fun PocketAiNavigation(settings: AppSettings) {
         }
         composable(Routes.LICENSES) {
             LicensesScreen(onBack = { navController.popBackStack() })
+        }
+        composable(Routes.BENCHMARK) {
+            val benchmarkViewModel: BenchmarkViewModel = viewModel()
+            BenchmarkScreen(viewModel = benchmarkViewModel, onBack = { navController.popBackStack() })
         }
     }
 }

@@ -80,6 +80,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pocketai.app.data.repo.ChatMessage
 import com.pocketai.app.data.repo.Conversation
+import com.pocketai.app.llm.ResponseMode
 import com.pocketai.app.ui.theme.LocalChatStyle
 import kotlinx.coroutines.launch
 
@@ -291,7 +292,18 @@ fun ChatScreen(
                         )
                     },
                     isEditing = uiState.editingMessageId != null,
-                    onCancelEdit = viewModel::cancelEdit
+                    onCancelEdit = viewModel::cancelEdit,
+                    responseMode = settings.responseMode,
+                    onCycleResponseMode = {
+                        // Tapping cycles Fast -> Balanced -> Thinking so the
+                        // speed/quality trade-off is one tap away mid-chat.
+                        val modes = ResponseMode.entries
+                        val next = modes[(modes.indexOf(settings.responseMode) + 1) % modes.size]
+                        scope.launch {
+                            viewModel.prefs.setResponseMode(next)
+                            snackbarHost.showSnackbar("${next.label}: ${next.description}")
+                        }
+                    }
                 )
             }
         ) { padding ->

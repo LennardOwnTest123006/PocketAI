@@ -9,6 +9,17 @@ import com.pocketai.app.core.DeviceCapabilities
  * front; the downloader always re-checks the real Content-Length before it
  * writes anything, so the progress UI never shows an invented number.
  */
+/**
+ * What a model is *for*. Bigger is not better on a phone: total response time
+ * is generated_tokens / decode_speed, so a 4B model answering a one-line
+ * question is slower in a way the user feels and no smarter in a way they see.
+ */
+enum class ModelTier(val label: String, val summary: String) {
+    FASTEST("Fastest", "Answers in about a second. Best for quick questions and dictation."),
+    BALANCED("Balanced", "The best intelligence-per-second trade-off on a modern phone."),
+    SMARTEST("Smartest", "Strongest reasoning, noticeably slower. Worth it for hard problems.")
+}
+
 data class CatalogModel(
     val id: String,
     val displayName: String,
@@ -21,6 +32,13 @@ data class CatalogModel(
     val recommendedRamGb: Double,
     val contextLength: Int,
     val supportsThinking: Boolean,
+    val tier: ModelTier,
+    /**
+     * Rough decode speed on a current flagship (Snapdragon 8 Gen 3 class),
+     * used only for ordering and for setting expectations in the UI. The
+     * benchmark screen measures the real figure for the actual device.
+     */
+    val estimatedTokensPerSecond: Int,
     val license: String,
     val downloadUrl: String,
     val fileName: String
@@ -65,6 +83,8 @@ object ModelCatalog {
             recommendedRamGb = 3.0,
             contextLength = 32768,
             supportsThinking = false,
+            tier = ModelTier.FASTEST,
+            estimatedTokensPerSecond = 45,
             license = "Apache-2.0",
             downloadUrl = "https://huggingface.co/bartowski/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf?download=true",
             fileName = "Qwen2.5-0.5B-Instruct-Q4_K_M.gguf"
@@ -81,6 +101,8 @@ object ModelCatalog {
             recommendedRamGb = 4.0,
             contextLength = 131072,
             supportsThinking = false,
+            tier = ModelTier.FASTEST,
+            estimatedTokensPerSecond = 30,
             license = "Llama 3.2 Community License",
             downloadUrl = "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf?download=true",
             fileName = "Llama-3.2-1B-Instruct-Q4_K_M.gguf"
@@ -97,6 +119,8 @@ object ModelCatalog {
             recommendedRamGb = 6.0,
             contextLength = 32768,
             supportsThinking = true,
+            tier = ModelTier.BALANCED,
+            estimatedTokensPerSecond = 20,
             license = "Apache-2.0",
             downloadUrl = "https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_K_M.gguf?download=true",
             fileName = "Qwen3-1.7B-Q4_K_M.gguf"
@@ -113,6 +137,8 @@ object ModelCatalog {
             recommendedRamGb = 6.0,
             contextLength = 32768,
             supportsThinking = false,
+            tier = ModelTier.BALANCED,
+            estimatedTokensPerSecond = 22,
             license = "Apache-2.0",
             downloadUrl = "https://huggingface.co/bartowski/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf?download=true",
             fileName = "Qwen2.5-1.5B-Instruct-Q4_K_M.gguf"
@@ -129,6 +155,8 @@ object ModelCatalog {
             recommendedRamGb = 8.0,
             contextLength = 131072,
             supportsThinking = false,
+            tier = ModelTier.SMARTEST,
+            estimatedTokensPerSecond = 13,
             license = "Llama 3.2 Community License",
             downloadUrl = "https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf?download=true",
             fileName = "Llama-3.2-3B-Instruct-Q4_K_M.gguf"
@@ -145,6 +173,8 @@ object ModelCatalog {
             recommendedRamGb = 12.0,
             contextLength = 32768,
             supportsThinking = true,
+            tier = ModelTier.SMARTEST,
+            estimatedTokensPerSecond = 9,
             license = "Apache-2.0",
             downloadUrl = "https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf?download=true",
             fileName = "Qwen3-4B-Q4_K_M.gguf"
@@ -161,6 +191,8 @@ object ModelCatalog {
             recommendedRamGb = 8.0,
             contextLength = 131072,
             supportsThinking = false,
+            tier = ModelTier.SMARTEST,
+            estimatedTokensPerSecond = 11,
             license = "MIT",
             downloadUrl = "https://huggingface.co/bartowski/Phi-3.5-mini-instruct-GGUF/resolve/main/Phi-3.5-mini-instruct-Q4_K_M.gguf?download=true",
             fileName = "Phi-3.5-mini-instruct-Q4_K_M.gguf"
@@ -177,6 +209,8 @@ object ModelCatalog {
             recommendedRamGb = 6.0,
             contextLength = 8192,
             supportsThinking = false,
+            tier = ModelTier.FASTEST,
+            estimatedTokensPerSecond = 24,
             license = "Apache-2.0",
             downloadUrl = "https://huggingface.co/bartowski/SmolLM2-1.7B-Instruct-GGUF/resolve/main/SmolLM2-1.7B-Instruct-Q4_K_M.gguf?download=true",
             fileName = "SmolLM2-1.7B-Instruct-Q4_K_M.gguf"
@@ -191,13 +225,28 @@ object ModelCatalog {
      */
     fun recommendedFor(caps: DeviceCapabilities): List<CatalogModel> =
         models.filter { it.fits(caps) == ModelFit.GOOD }
-            .sortedByDescending { it.approxSizeBytes }
+            .sortedByDescending { it.estimatedTokensPerSecond }
 
-    /** The single model PocketAI proposes during first-run setup. */
+    /** Models of a given tier that this device can actually run. */
+    fun tier(tier: ModelTier, caps: DeviceCapabilities): List<CatalogModel> =
+        recommendedFor(caps).filter { it.tier == tier }
+            .sortedByDescending { it.estimatedTokensPerSecond }
+
+    /**
+     * The single model PocketAI proposes during first-run setup.
+     *
+     * Deliberately not "the largest that fits". Response time is dominated by
+     * decode speed, and a 4B model spends four times as long saying the same
+     * thing as a 1.5B for most everyday questions. The default is the Balanced
+     * tier - fast enough to feel immediate, capable enough to be useful - and
+     * only falls back to the Fastest tier on constrained devices.
+     */
     fun defaultFor(caps: DeviceCapabilities): CatalogModel {
+        tier(ModelTier.BALANCED, caps).firstOrNull()?.let { return it }
+        tier(ModelTier.FASTEST, caps).firstOrNull()?.let { return it }
         val good = recommendedFor(caps)
-        return good.firstOrNull { it.approxSizeBytes <= caps.recommendedMaxModelBytes }
-            ?: good.lastOrNull()
+        return good.minByOrNull { it.approxSizeBytes }
+            ?: models.minByOrNull { it.approxSizeBytes }
             ?: models.first()
     }
 }

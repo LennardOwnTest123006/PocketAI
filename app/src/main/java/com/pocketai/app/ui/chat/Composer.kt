@@ -30,6 +30,7 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalTextStyle
@@ -52,6 +53,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.pocketai.app.doc.ExtractedDocument
+import com.pocketai.app.llm.ResponseMode
 
 /**
  * The message composer.
@@ -75,6 +77,8 @@ fun Composer(
     onVoiceResult: (String) -> Unit,
     isEditing: Boolean,
     onCancelEdit: () -> Unit,
+    responseMode: ResponseMode,
+    onCycleResponseMode: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -242,6 +246,12 @@ fun Composer(
                         }
                         runCatching { speechLauncher.launch(intent) }
                     }
+                )
+                ComposerChip(
+                    icon = Icons.Outlined.Speed,
+                    label = responseMode.label,
+                    active = responseMode != ResponseMode.BALANCED,
+                    onClick = onCycleResponseMode
                 )
                 ComposerChip(
                     icon = Icons.Outlined.Language,

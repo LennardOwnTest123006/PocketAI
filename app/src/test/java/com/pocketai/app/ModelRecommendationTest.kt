@@ -5,6 +5,7 @@ import com.pocketai.app.core.DeviceClass
 import com.pocketai.app.core.PerformanceMode
 import com.pocketai.app.data.model.ModelCatalog
 import com.pocketai.app.data.model.ModelFit
+import com.pocketai.app.data.model.ModelTier
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -70,6 +71,52 @@ class ModelRecommendationTest {
                 choice.minRamGb <= caps.totalRamGb
             )
         }
+    }
+
+    @Test
+    fun `the default is chosen for speed, not for size`() {
+        // The old rule was "largest model that fits", which on a flagship meant
+        // a 4B reasoning model and roughly a hundred seconds per answer.
+        val flagship = device(ramGb = 12.0)
+        val choice = ModelCatalog.defaultFor(flagship)
+        val largest = ModelCatalog.recommendedFor(flagship).maxByOrNull { it.approxSizeBytes }!!
+
+        assertEquals(ModelTier.BALANCED, choice.tier)
+        assertTrue(
+            "default ${choice.displayName} should not be the largest option",
+            choice.approxSizeBytes < largest.approxSizeBytes
+        )
+        assertTrue(
+            "default should decode meaningfully faster than the largest model",
+            choice.estimatedTokensPerSecond > largest.estimatedTokensPerSecond
+        )
+    }
+
+    @Test
+    fun `recommendations are ordered fastest first`() {
+        val speeds = ModelCatalog.recommendedFor(device(ramGb = 12.0))
+            .map { it.estimatedTokensPerSecond }
+        assertEquals(speeds.sortedDescending(), speeds)
+    }
+
+    @Test
+    fun `constrained devices still get a runnable default`() {
+        val modest = device(ramGb = 3.0)
+        val choice = ModelCatalog.defaultFor(modest)
+        assertEquals(ModelFit.GOOD, choice.fits(modest))
+        assertEquals(ModelTier.FASTEST, choice.tier)
+    }
+
+    @Test
+    fun `every tier is represented and speeds are ordered by tier`() {
+        ModelTier.entries.forEach { tier ->
+            assertTrue("no models in $tier", ModelCatalog.models.any { it.tier == tier })
+        }
+        val fastest = ModelCatalog.models.filter { it.tier == ModelTier.FASTEST }
+            .minOf { it.estimatedTokensPerSecond }
+        val smartest = ModelCatalog.models.filter { it.tier == ModelTier.SMARTEST }
+            .maxOf { it.estimatedTokensPerSecond }
+        assertTrue("fastest tier must outrun the smartest tier", fastest > smartest)
     }
 
     @Test

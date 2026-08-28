@@ -53,6 +53,7 @@ import com.pocketai.app.data.repo.EmojiStyle
 import com.pocketai.app.data.repo.SearchProvider
 import com.pocketai.app.data.repo.TableStyle
 import com.pocketai.app.data.repo.TextColors
+import com.pocketai.app.llm.ResponseMode
 import com.pocketai.app.ui.theme.PocketThemes
 import kotlinx.coroutines.launch
 
@@ -63,7 +64,8 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onOpenModels: () -> Unit,
     onOpenPrivacy: () -> Unit,
-    onOpenLicenses: () -> Unit
+    onOpenLicenses: () -> Unit,
+    onOpenBenchmark: () -> Unit
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val engineState by viewModel.engineState.collectAsStateWithLifecycle()
@@ -150,6 +152,15 @@ fun SettingsScreen(
                         format = { "${it.toInt()} tokens" },
                         onChange = { scope.launch { prefs.setMaxOutputTokens(it.toInt()) } }
                     )
+                    OptionPills(
+                        title = "Response mode",
+                        subtitle = settings.responseMode.description +
+                            "  Budget: up to ${settings.responseMode.maxTokens} tokens.",
+                        options = ResponseMode.entries,
+                        selected = settings.responseMode,
+                        label = { it.label },
+                        onSelect = { scope.launch { prefs.setResponseMode(it) } }
+                    )
                     SettingsSwitch(
                         title = "Show thinking",
                         subtitle = "Display the reasoning models emit inside <think> blocks. " +
@@ -207,6 +218,11 @@ fun SettingsScreen(
                         },
                         onChange = { scope.launch { prefs.setThreadOverride(it.toInt()) } },
                         onChangeFinished = { scope.launch { viewModel.reloadModel() } }
+                    )
+                    SettingsRow(
+                        title = "Performance benchmark",
+                        subtitle = "Measure time-to-first-token and tokens per second on this device.",
+                        onClick = onOpenBenchmark
                     )
                     SettingsRow(
                         title = "Acceleration",
