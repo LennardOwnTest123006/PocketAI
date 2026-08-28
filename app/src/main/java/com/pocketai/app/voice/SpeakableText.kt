@@ -163,14 +163,23 @@ object SpeakableText {
     private val SENTENCE_ENDINGS = charArrayOf('.', '!', '?', '。', '！', '？', '…')
 
     /**
-     * Abbreviations whose full stop does not end a sentence. Deliberately short:
-     * a missed split costs one slightly long utterance, a wrong split cuts a
-     * sentence in half mid-thought.
+     * Abbreviations whose full stop does not end a sentence.
+     *
+     * The two mistakes are not equally cheap. Splitting where there was no
+     * sentence break costs one extra pause. Failing to split where there was
+     * one means the sentence is never handed over while the model writes, so it
+     * waits for the end of generation - the delay this class exists to remove.
+     *
+     * So the list holds only abbreviations that are essentially never the last
+     * word of a sentence. "no.", "etc." and "usw." were tried and removed:
+     * they are abbreviations, but "the answer is no." and "apples, oranges,
+     * etc." are ordinary sentence endings, and far commoner in speech than the
+     * abbreviated readings.
      */
     private val ABBREVIATIONS = setOf(
-        "mr.", "mrs.", "ms.", "dr.", "prof.", "st.", "vs.", "etc.", "e.g.", "i.e.",
-        "z.b.", "u.a.", "usw.", "bzw.", "ca.", "nr.", "abb.", "inkl.", "evtl.",
-        "p.ej.", "ej.", "cf.", "fig.", "no.", "approx."
+        "mr.", "mrs.", "ms.", "dr.", "prof.", "st.", "vs.", "e.g.", "i.e.",
+        "z.b.", "u.a.", "bzw.", "ca.", "nr.", "abb.", "inkl.", "evtl.",
+        "p.ej.", "ej.", "cf.", "fig.", "approx."
     )
 
     private val FENCED_CODE = Regex("```[\\s\\S]*?```")

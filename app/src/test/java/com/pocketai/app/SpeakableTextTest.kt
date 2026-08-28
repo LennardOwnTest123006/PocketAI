@@ -94,6 +94,26 @@ class SpeakableTextTest {
     }
 
     @Test
+    fun `a sentence ending in the word no is still a sentence`() {
+        // "no." is an abbreviation for "number", but treating it as one here
+        // would silently swallow one of the commonest spoken answers there is.
+        val (sentences, _) = SpeakableText.completeSentences("The answer is no. Try again. ")
+        assertEquals(listOf("The answer is no.", "Try again."), sentences)
+    }
+
+    @Test
+    fun `a list ending in etc is still a sentence`() {
+        val (sentences, _) = SpeakableText.completeSentences("Apples, pears, etc. That is all. ")
+        assertEquals(listOf("Apples, pears, etc.", "That is all."), sentences)
+    }
+
+    @Test
+    fun `a real abbreviation still does not split`() {
+        val (sentences, _) = SpeakableText.completeSentences("Ask Prof. Meier first. Then go. ")
+        assertEquals(listOf("Ask Prof. Meier first.", "Then go."), sentences)
+    }
+
+    @Test
     fun `an unfinished sentence is left for the next chunk`() {
         val (sentences, consumed) = SpeakableText.completeSentences("Done. And this is unfinis")
         assertEquals(listOf("Done."), sentences)
