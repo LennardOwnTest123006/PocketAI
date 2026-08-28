@@ -350,8 +350,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** Summarises whatever the user pasted into the composer. */
     fun summarizeText(text: String, mode: SummaryMode) {
         if (_uiState.value.streaming != null || text.isBlank()) return
+        _uiState.value = _uiState.value.copy(composerText = "", editingMessageId = null)
         viewModelScope.launch {
             val conversation = ensureConversation()
             chats.addMessage(

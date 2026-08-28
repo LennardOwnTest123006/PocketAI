@@ -37,6 +37,7 @@ import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Summarize
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
@@ -108,6 +109,7 @@ fun ChatScreen(
     var summaryTarget by remember { mutableStateOf<ChatMessage?>(null) }
     var selectTextTarget by remember { mutableStateOf<String?>(null) }
     var showTextSize by remember { mutableStateOf(false) }
+    var summarizeComposer by remember { mutableStateOf(false) }
     var showExport by remember { mutableStateOf(false) }
     var renameTarget by remember { mutableStateOf<Conversation?>(null) }
     var deleteTarget by remember { mutableStateOf<Conversation?>(null) }
@@ -225,6 +227,22 @@ fun ChatScreen(
                                     text = { Text("Export chat") },
                                     leadingIcon = { Icon(Icons.Outlined.IosShare, null) },
                                     onClick = { overflowOpen = false; showExport = true }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Summarize pasted text") },
+                                    leadingIcon = { Icon(Icons.Outlined.Summarize, null) },
+                                    onClick = {
+                                        overflowOpen = false
+                                        if (uiState.composerText.isBlank()) {
+                                            scope.launch {
+                                                snackbarHost.showSnackbar(
+                                                    "Paste or type the text you want summarized first."
+                                                )
+                                            }
+                                        } else {
+                                            summarizeComposer = true
+                                        }
+                                    }
                                 )
                                 DropdownMenuItem(
                                     text = { Text("Text size") },
@@ -362,6 +380,14 @@ fun ChatScreen(
         SummaryModeSheet(
             onDismiss = { summaryTarget = null },
             onPick = { mode -> viewModel.summarize(message, mode) }
+        )
+    }
+
+    if (summarizeComposer) {
+        val pending = uiState.composerText
+        SummaryModeSheet(
+            onDismiss = { summarizeComposer = false },
+            onPick = { mode -> viewModel.summarizeText(pending, mode) }
         )
     }
 

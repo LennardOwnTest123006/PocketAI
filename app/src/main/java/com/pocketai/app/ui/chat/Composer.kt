@@ -52,7 +52,6 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.pocketai.app.doc.ExtractedDocument
-import com.pocketai.app.doc.DocumentExtractor
 
 /**
  * The message composer.
@@ -331,7 +330,3 @@ val DOCUMENT_MIME_TYPES: Array<String> = arrayOf(
     "application/x-yaml",
     "application/octet-stream"
 )
-
-@Composable
-fun rememberSupportedExtensionsLabel(): String =
-    remember { DocumentExtractor.SUPPORTED_LABEL }
