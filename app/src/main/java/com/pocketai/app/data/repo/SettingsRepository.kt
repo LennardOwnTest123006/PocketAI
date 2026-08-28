@@ -157,7 +157,7 @@ class SettingsRepository(private val context: Context) {
                 localOnlyMode = p[Keys.localOnlyMode] ?: false,
                 showPerformanceStats = p[Keys.showPerformanceStats] ?: true,
                 speak = SpeakSettings(
-                    autoDetectLanguage = p[Keys.speakAutoDetect] ?: true,
+                    autoDetectLanguage = p[Keys.speakAutoDetect] ?: false,
                     languageTag = p[Keys.speakLanguage] ?: "",
                     voicePitch = p[Keys.speakPitch] ?: defaults.speak.voicePitch,
                     voiceRate = p[Keys.speakRate] ?: defaults.speak.voiceRate,

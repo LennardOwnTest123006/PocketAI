@@ -40,7 +40,6 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.io.File
-import java.util.Locale
 
 /** Text currently being produced by the model. */
 data class StreamingState(
@@ -358,9 +357,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     fun startSpeakMode() {
         val speech = settings.value.speak
-        val language = SpokenLanguage.fromTag(speech.languageTag)
-            ?: SpokenLanguage.fromTag(Locale.getDefault().toLanguageTag())
-            ?: SpokenLanguage.ENGLISH
+        // Default to English and only use another language if the user picked
+        // one explicitly. The app and its replies stay English even when the
+        // phone's system language (and the user's speech) is German.
+        val language = SpokenLanguage.fromTag(speech.languageTag) ?: SpokenLanguage.ENGLISH
         speak.start(
             language = language,
             autoDetect = speech.autoDetectLanguage,

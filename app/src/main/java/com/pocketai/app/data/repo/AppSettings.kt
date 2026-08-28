@@ -170,7 +170,7 @@ data class SpeakSettings(
      * Let the language of the reply follow the language that was spoken. Off
      * means PocketAI always answers in [languageTag].
      */
-    val autoDetectLanguage: Boolean = true,
+    val autoDetectLanguage: Boolean = false,
     /** Empty means "follow the phone's language". */
     val languageTag: String = "",
     /**

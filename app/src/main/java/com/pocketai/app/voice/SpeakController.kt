@@ -490,8 +490,9 @@ class SpeakController(
         const val RESTART_DELAY_MS = 60L
         /** On-device stumbles allowed before switching to the online recogniser. */
         const val ON_DEVICE_PATIENCE = 2
-        /** Cap on CONSECUTIVE failed restarts (progress resets it), so a dead
-         *  recogniser cannot spin forever within one hold. */
-        const val MAX_RESTARTS_PER_HOLD = 60
+        /** Cap on CONSECUTIVE empty restarts (any speech resets it and lifts the
+         *  cap for the rest of the hold), so silence while holding keeps the mic
+         *  open but a truly dead recogniser cannot spin forever. */
+        const val MAX_RESTARTS_PER_HOLD = 300
     }
 }

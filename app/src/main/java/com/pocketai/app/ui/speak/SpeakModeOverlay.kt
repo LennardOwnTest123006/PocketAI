@@ -44,6 +44,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -297,7 +298,6 @@ private fun HoldToTalkButton(
 ) {
     val held = phase == SpeakPhase.LISTENING
     val busy = phase == SpeakPhase.THINKING
-    val canHold = enabled && !busy
 
     val label = when {
         busy -> "Thinking..."
@@ -307,9 +307,17 @@ private fun HoldToTalkButton(
     }
     val fill = when {
         held -> MaterialTheme.colorScheme.primary
-        !canHold -> MaterialTheme.colorScheme.surfaceVariant
+        !enabled || busy -> MaterialTheme.colorScheme.surfaceVariant
         else -> MaterialTheme.colorScheme.primaryContainer
     }
+
+    // Read the latest enable/busy inside the gesture without ever re-attaching
+    // the pointer handler. The old code swapped the modifier when the phase
+    // changed, which cancelled the in-progress press and released the button on
+    // its own - that is why holding turned itself off after a word.
+    val canPress = rememberUpdatedState(enabled && !busy)
+    val startHold = rememberUpdatedState(onHoldStart)
+    val endHold = rememberUpdatedState(onHoldEnd)
 
     Surface(
         shape = RoundedCornerShape(40.dp),
@@ -318,21 +326,22 @@ private fun HoldToTalkButton(
         modifier = Modifier
             .fillMaxWidth()
             .height(72.dp)
-            .then(
-                if (canHold) {
-                    Modifier.pointerInput(Unit) {
-                        detectTapGestures(
-                            onPress = {
-                                onHoldStart()
-                                // Suspends until the finger lifts (or the gesture
-                                // is cancelled), then finalises the utterance.
-                                tryAwaitRelease()
-                                onHoldEnd()
-                            }
-                        )
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onPress = {
+                        if (canPress.value) {
+                            startHold.value()
+                            // Suspends until the finger actually lifts. The handler
+                            // is never detached, so a state change cannot end the
+                            // hold - only the real release does.
+                            tryAwaitRelease()
+                            endHold.value()
+                        } else {
+                            tryAwaitRelease()
+                        }
                     }
-                } else Modifier
-            )
+                )
+            }
     ) {
         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
             Text(
