@@ -61,22 +61,22 @@ target_link_options(pocketai_llm PRIVATE -Wl,--gc-sections)
 
 target_link_libraries(pocketai_llm PRIVATE llama ggml ggml-base android log)
 
-# Make sure every ggml backend variant is built (and therefore packaged into the
-# APK) even though llama.cpp was added with EXCLUDE_FROM_ALL.
+# Collect every dlopen-able ggml backend that this ABI produced.
+#
+# The variant names are architecture specific (android_armv8.* on arm64,
+# x64/haswell/... on x86_64), so they are discovered from the build system
+# rather than hard-coded - that keeps the emulator build working and picks up
+# new variants when llama.cpp adds them.
 set(POCKETAI_BACKEND_TARGETS "")
-foreach (variant
-        ggml-cpu-android_armv8.0_1
-        ggml-cpu-android_armv8.2_1
-        ggml-cpu-android_armv8.2_2
-        ggml-cpu-android_armv8.6_1)
-    if (TARGET ${variant})
-        list(APPEND POCKETAI_BACKEND_TARGETS ${variant})
+get_property(POCKETAI_GGML_TARGETS
+    DIRECTORY "${LLAMA_CPP_DIR}/ggml/src"
+    PROPERTY BUILDSYSTEM_TARGETS)
+
+foreach (candidate ${POCKETAI_GGML_TARGETS})
+    if (candidate MATCHES "^ggml-cpu-" OR candidate MATCHES "^ggml-vulkan$")
+        list(APPEND POCKETAI_BACKEND_TARGETS ${candidate})
     endif()
 endforeach()
-
-if (POCKETAI_VULKAN AND TARGET ggml-vulkan)
-    list(APPEND POCKETAI_BACKEND_TARGETS ggml-vulkan)
-endif()
 
 if (POCKETAI_BACKEND_TARGETS)
     add_dependencies(pocketai_llm ${POCKETAI_BACKEND_TARGETS})

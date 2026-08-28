@@ -28,6 +28,9 @@ val llamaCppDir = file("src/main/cpp/llama.cpp")
 val hasNativeSources = llamaCppDir.resolve("CMakeLists.txt").exists()
 val vulkanEnabled = (providers.gradleProperty("pocketai.vulkan").orNull ?: "false").toBoolean()
 
+// Overrides the packaged ABI set; used only by the instrumented test job.
+val testAbi: String? = providers.gradleProperty("pocketai.testAbi").orNull
+
 android {
     namespace = "com.pocketai.app"
     compileSdk = 35
@@ -44,9 +47,16 @@ android {
         vectorDrawables { useSupportLibrary = true }
 
         ndk {
-            // 64-bit ARM only: every device that can realistically run local LLM
-            // inference is arm64, and dropping 32-bit keeps the APK small.
-            abiFilters += "arm64-v8a"
+            // 64-bit ARM only for shipped builds: every device that can
+            // realistically run local LLM inference is arm64, and dropping
+            // 32-bit keeps the APK small. The instrumented test job overrides
+            // this with -Ppocketai.testAbi=x86_64 so the suite can run on an
+            // emulator without also building the ARM libraries.
+            abiFilters += if (!testAbi.isNullOrBlank()) {
+                testAbi.split(",").map { it.trim() }
+            } else {
+                listOf("arm64-v8a")
+            }
         }
 
         if (hasNativeSources) {
@@ -186,4 +196,6 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
