@@ -311,6 +311,7 @@ fun ChatScreen(
                                 message = message,
                                 showThinking = settings.showThinking,
                                 showStats = settings.showPerformanceStats,
+                                showSources = settings.showSources,
                                 onCopy = ::copy,
                                 onShare = ::share,
                                 onOpenActions = { actionTarget = message }
@@ -321,6 +322,7 @@ fun ChatScreen(
                                 StreamingBubble(
                                     state = streaming,
                                     showThinking = settings.showThinking,
+                                    showSources = settings.showSources,
                                     onCopy = ::copy,
                                     onShare = ::share
                                 )

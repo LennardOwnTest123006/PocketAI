@@ -210,7 +210,9 @@ Java_com_pocketai_app_llm_LlamaNative_nativeBackendInfo(JNIEnv * env, jobject) {
         if (dev == nullptr) continue;
         const char * name = ggml_backend_dev_name(dev);
         const char * desc = ggml_backend_dev_description(dev);
-        ggml_backend_dev_type type = ggml_backend_dev_type(dev);
+        // The function ggml_backend_dev_type() hides the enum of the same
+        // name in C++, so the type needs its explicit 'enum' tag here.
+        const enum ggml_backend_dev_type type = ggml_backend_dev_type(dev);
         size_t free_mem = 0, total_mem = 0;
         ggml_backend_dev_memory(dev, &free_mem, &total_mem);
         if (type == GGML_BACKEND_DEVICE_TYPE_GPU) has_gpu = true;

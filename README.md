@@ -32,6 +32,20 @@ reference device.
   radius, code themes, table styles, animation level and emoji style.
 - **Export/import** — TXT, Markdown, JSON and real paginated PDF.
 
+## Foldables and the Galaxy Z Flip6
+
+The activity declares `resizeableActivity` and handles configuration changes
+itself, so folding, unfolding, rotating and opening the keyboard resize the UI
+in place - the activity is never recreated and no chat state is lost. On a wide
+screen the transcript is centred within a readable measure instead of stretching
+across the full width.
+
+Android exposes no public API for running an arbitrary app on the Z Flip6 cover
+screen; that is gated behind Samsung's own launcher. PocketAI therefore supports
+what is actually available - correct behaviour across every size the system
+hands it, including the small cover-screen configuration when a device is set up
+to allow it - rather than pretending to use an API that does not exist.
+
 ## Building
 
 The Android SDK, NDK and Google's Maven repository are required.

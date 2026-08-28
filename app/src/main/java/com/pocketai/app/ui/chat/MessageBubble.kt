@@ -74,6 +74,7 @@ fun MessageBubble(
     message: ChatMessage,
     showThinking: Boolean,
     showStats: Boolean,
+    showSources: Boolean,
     onCopy: (String) -> Unit,
     onShare: (String) -> Unit,
     onOpenActions: () -> Unit,
@@ -149,7 +150,7 @@ fun MessageBubble(
                         )
                     }
                 }
-                if (message.sources.isNotEmpty()) {
+                if (showSources && message.sources.isNotEmpty()) {
                     Spacer(Modifier.height(8.dp))
                     SourceList(message.sources)
                 }
@@ -209,6 +210,7 @@ private fun MessageActionBar(
 fun StreamingBubble(
     state: StreamingState,
     showThinking: Boolean,
+    showSources: Boolean,
     onCopy: (String) -> Unit,
     onShare: (String) -> Unit,
     modifier: Modifier = Modifier
@@ -243,7 +245,7 @@ fun StreamingBubble(
         } else if (!state.insideThinking) {
             TypingIndicator()
         }
-        if (state.sources.isNotEmpty()) {
+        if (showSources && state.sources.isNotEmpty()) {
             Spacer(Modifier.height(8.dp))
             SourceList(state.sources)
         }

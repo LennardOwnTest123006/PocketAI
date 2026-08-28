@@ -80,7 +80,24 @@ endif()
 
 if (POCKETAI_BACKEND_TARGETS)
     add_dependencies(pocketai_llm ${POCKETAI_BACKEND_TARGETS})
+
+    # With GGML_BACKEND_DL the backends are CMake MODULE libraries and ggml
+    # points them at CMAKE_RUNTIME_OUTPUT_DIRECTORY. The Android Gradle plugin
+    # only packages what lands in CMAKE_LIBRARY_OUTPUT_DIRECTORY, so without
+    # this redirect the .so files are built but never make it into the APK -
+    # and since the CPU backend is not linked into libggml.so under
+    # GGML_BACKEND_DL, the app would ship with no usable backend at all.
+    foreach (variant ${POCKETAI_BACKEND_TARGETS})
+        set_target_properties(${variant} PROPERTIES
+            LIBRARY_OUTPUT_DIRECTORY "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}"
+            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
+    endforeach()
+
     message(STATUS "PocketAI ggml backends: ${POCKETAI_BACKEND_TARGETS}")
+    message(STATUS "PocketAI backend output dir: ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
 else()
-    message(WARNING "PocketAI: no dynamic ggml backend variants were found")
+    message(FATAL_ERROR
+        "No dlopen-able ggml backend variants were configured. GGML_BACKEND_DL "
+        "leaves libggml.so without a built-in CPU backend, so the app would be "
+        "unable to run any model.")
 endif()

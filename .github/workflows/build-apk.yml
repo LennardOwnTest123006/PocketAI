@@ -135,7 +135,16 @@ jobs:
           done
 
           echo "=== ggml CPU backend variants ==="
-          unzip -l PocketAI.apk | grep -c 'libggml-cpu-' || true
+          # GGML_BACKEND_DL means the CPU kernels live in separate .so files that
+          # are dlopen'd at runtime. If they are missing the app has no backend
+          # at all, so treat their absence as a build failure.
+          VARIANTS="$(unzip -l PocketAI.apk | grep -c 'libggml-cpu-' || true)"
+          echo "packaged CPU backend variants: ${VARIANTS}"
+          unzip -l PocketAI.apk | grep 'libggml-' || true
+          if [ "${VARIANTS}" -lt 1 ]; then
+            echo "ERROR: no libggml-cpu-*.so packaged; the app could not load any model"
+            exit 1
+          fi
 
           echo "=== Size ==="
           ls -lh PocketAI.apk
