@@ -181,10 +181,13 @@ data class SpeakSettings(
     val voicePitch: Float = 0.96f,
     val voiceRate: Float = 0.98f,
     /**
-     * Refuse recognisers that would upload audio. On means Speak Mode only runs
-     * where the phone can transcribe locally, which is the point of the app.
+     * Refuse recognisers that would upload audio. Off by default so Speak Mode
+     * works out of the box: it always prefers the on-device recogniser, and only
+     * falls back to the online one (announcing it) when the phone has no offline
+     * pack for the language. Turning this on makes that fallback a hard stop for
+     * users who want nothing sent off the device.
      */
-    val onDeviceRecognitionOnly: Boolean = true,
+    val onDeviceRecognitionOnly: Boolean = false,
     /** Keep the turn-taking loop going instead of stopping after one answer. */
     val continuousConversation: Boolean = true,
     /** Cap spoken replies; a paragraph read aloud is already a long answer. */

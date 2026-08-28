@@ -161,7 +161,7 @@ class SettingsRepository(private val context: Context) {
                     languageTag = p[Keys.speakLanguage] ?: "",
                     voicePitch = p[Keys.speakPitch] ?: defaults.speak.voicePitch,
                     voiceRate = p[Keys.speakRate] ?: defaults.speak.voiceRate,
-                    onDeviceRecognitionOnly = p[Keys.speakOnDeviceOnly] ?: true,
+                    onDeviceRecognitionOnly = p[Keys.speakOnDeviceOnly] ?: false,
                     continuousConversation = p[Keys.speakContinuous] ?: true,
                     shorterSpokenReplies = p[Keys.speakShorterReplies] ?: true
                 )

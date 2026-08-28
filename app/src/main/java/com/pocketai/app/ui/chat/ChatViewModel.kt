@@ -364,7 +364,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         speak.start(
             language = language,
             autoDetect = speech.autoDetectLanguage,
-            preferOnDeviceRecognition = speech.onDeviceRecognitionOnly,
+            onDeviceRecognitionOnly = speech.onDeviceRecognitionOnly,
             continuousConversation = speech.continuousConversation,
             pitch = speech.voicePitch,
             speechRate = speech.voiceRate

@@ -138,6 +138,9 @@ fun SpeakModeOverlay(viewModel: ChatViewModel, onClose: () -> Unit) {
                     state.phase == SpeakPhase.THINKING -> "Thinking"
                     state.phase == SpeakPhase.SPEAKING -> "Speaking"
                     state.phase == SpeakPhase.ERROR -> "Speak Mode stopped"
+                    // active + IDLE means it paused between turns and is waiting
+                    // for a tap, not still starting up.
+                    state.active && state.phase == SpeakPhase.IDLE -> "Tap Speak to talk"
                     else -> "Starting"
                 },
                 fontSize = 20.sp,

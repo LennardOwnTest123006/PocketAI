@@ -299,9 +299,10 @@ fun SettingsScreen(
                     )
                     SettingsSwitch(
                         title = "On-device speech recognition only",
-                        subtitle = "Refuses recognisers that upload audio. If your phone has " +
-                            "no offline recogniser for a language, Speak Mode will say so " +
-                            "rather than send your voice away.",
+                        subtitle = "Speak Mode always prefers the on-device recogniser. With " +
+                            "this off, it falls back to online recognition (and tells you) when " +
+                            "your phone has no offline pack for a language. Turn it on to refuse " +
+                            "that fallback and keep every word on the device.",
                         checked = settings.speak.onDeviceRecognitionOnly,
                         onChange = { scope.launch { prefs.setSpeakOnDeviceOnly(it) } }
                     )
