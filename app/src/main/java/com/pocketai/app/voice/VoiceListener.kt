@@ -202,6 +202,17 @@ class VoiceListener(private val context: Context) {
             putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, MIN_UTTERANCE_MS)
         }
 
+    /**
+     * Tells the recogniser the user has stopped talking (button released), so it
+     * finalises the current utterance and delivers onResults. This is what makes
+     * hold-to-talk exact: the turn ends when the finger lifts, not when the
+     * endpointer guesses. Keeps the recogniser alive for the next hold.
+     */
+    fun finishListening() {
+        _listening.value = false
+        runCatching { recognizer?.stopListening() }
+    }
+
     /** Full teardown, used when leaving Speak Mode. */
     fun stop() {
         _listening.value = false
@@ -284,8 +295,11 @@ class VoiceListener(private val context: Context) {
     private companion object {
         const val TAG = "PocketAIVoice"
         const val SILENCE_MESSAGE = "I did not catch that."
-        const val SILENCE_TO_END_MS = 1500
-        const val SILENCE_POSSIBLY_DONE_MS = 1000
-        const val MIN_UTTERANCE_MS = 500
+        // Hold-to-talk drives the turn end with finishListening(), so the
+        // endpointer's silence timers are set long to keep them out of the way:
+        // a pause mid-sentence must not end the turn while the button is held.
+        const val SILENCE_TO_END_MS = 600000
+        const val SILENCE_POSSIBLY_DONE_MS = 600000
+        const val MIN_UTTERANCE_MS = 300
     }
 }

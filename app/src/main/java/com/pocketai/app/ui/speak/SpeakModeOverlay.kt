@@ -10,6 +10,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,7 +29,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AssistChip
-import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -48,6 +48,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -213,21 +214,20 @@ fun SpeakModeOverlay(viewModel: ChatViewModel, onClose: () -> Unit) {
                 Spacer(Modifier.height(10.dp))
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (state.active && state.phase == SpeakPhase.IDLE) {
-                    // Reached with continuous conversation switched off, where
-                    // each turn is started deliberately.
-                    Button(onClick = viewModel::listenAgain) { Text("Speak") }
-                }
-                if (state.phase == SpeakPhase.SPEAKING) {
-                    // Interruption is a button rather than a hot microphone:
-                    // listening through the phone's own speaker needs echo
-                    // cancellation that cannot be relied on across devices.
-                    Button(onClick = viewModel::interruptSpeaking) { Text("Interrupt") }
-                }
-                OutlinedButton(onClick = { viewModel.stopSpeakMode(); onClose() }) {
-                    Text("Done")
-                }
+            // Hold-to-talk. The microphone is open only while the button is
+            // held, and releasing sends immediately - no guessing when a turn
+            // ended, which is what did not work with automatic listening.
+            HoldToTalkButton(
+                phase = state.phase,
+                enabled = state.active && !permissionDenied,
+                onHoldStart = viewModel::startHoldToTalk,
+                onHoldEnd = viewModel::stopHoldToTalk
+            )
+
+            Spacer(Modifier.height(10.dp))
+
+            OutlinedButton(onClick = { viewModel.stopSpeakMode(); onClose() }) {
+                Text("Done")
             }
         }
     }
@@ -277,6 +277,71 @@ fun SpeakModeOverlay(viewModel: ChatViewModel, onClose: () -> Unit) {
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Press-and-hold to talk.
+ *
+ * The label tells the user what the button will do next, and the fill reflects
+ * the current phase so a held button plainly reads as recording. While PocketAI
+ * is thinking the button is disabled - there is nothing to speak into yet.
+ */
+@Composable
+private fun HoldToTalkButton(
+    phase: SpeakPhase,
+    enabled: Boolean,
+    onHoldStart: () -> Unit,
+    onHoldEnd: () -> Unit
+) {
+    val held = phase == SpeakPhase.LISTENING
+    val busy = phase == SpeakPhase.THINKING
+    val canHold = enabled && !busy
+
+    val label = when {
+        busy -> "Thinking..."
+        held -> "Release to send"
+        phase == SpeakPhase.SPEAKING -> "Hold to interrupt and talk"
+        else -> "Hold to talk"
+    }
+    val fill = when {
+        held -> MaterialTheme.colorScheme.primary
+        !canHold -> MaterialTheme.colorScheme.surfaceVariant
+        else -> MaterialTheme.colorScheme.primaryContainer
+    }
+
+    Surface(
+        shape = RoundedCornerShape(40.dp),
+        color = fill,
+        tonalElevation = if (held) 6.dp else 2.dp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(72.dp)
+            .then(
+                if (canHold) {
+                    Modifier.pointerInput(Unit) {
+                        detectTapGestures(
+                            onPress = {
+                                onHoldStart()
+                                // Suspends until the finger lifts (or the gesture
+                                // is cancelled), then finalises the utterance.
+                                tryAwaitRelease()
+                                onHoldEnd()
+                            }
+                        )
+                    }
+                } else Modifier
+            )
+    ) {
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+            Text(
+                label,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = if (held) MaterialTheme.colorScheme.onPrimary
+                else MaterialTheme.colorScheme.onSurface
+            )
         }
     }
 }

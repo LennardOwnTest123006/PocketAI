@@ -284,13 +284,6 @@ fun SettingsScreen(
                         onChange = { scope.launch { prefs.setSpeakAutoDetect(it) } }
                     )
                     SettingsSwitch(
-                        title = "Keep the conversation going",
-                        subtitle = "Listen again as soon as PocketAI finishes talking, so a " +
-                            "conversation needs no tapping.",
-                        checked = settings.speak.continuousConversation,
-                        onChange = { scope.launch { prefs.setSpeakContinuous(it) } }
-                    )
-                    SettingsSwitch(
                         title = "Shorter spoken answers",
                         subtitle = "A written answer can be skimmed; a spoken one has to be " +
                             "sat through. Keeps replies to roughly a minute.",

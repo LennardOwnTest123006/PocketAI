@@ -365,22 +365,24 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             language = language,
             autoDetect = speech.autoDetectLanguage,
             onDeviceRecognitionOnly = speech.onDeviceRecognitionOnly,
-            continuousConversation = speech.continuousConversation,
             pitch = speech.voicePitch,
             speechRate = speech.voiceRate
         )
     }
+
+    /** Press and hold the talk button: open the microphone. */
+    fun startHoldToTalk() = speak.holdStart()
+
+    /** Release the talk button: finalise what was said and answer. */
+    fun stopHoldToTalk() = speak.holdEnd()
 
     fun stopSpeakMode() {
         speak.stop()
         spokenLanguage = null
     }
 
-    /** Cuts PocketAI off mid-sentence and gives the turn straight back. */
+    /** Cuts PocketAI off mid-sentence, ready for the next hold. */
     fun interruptSpeaking() = speak.interrupt()
-
-    /** Re-opens the microphone when continuous conversation is switched off. */
-    fun listenAgain() = speak.listenAgain()
 
     fun setSpokenLanguage(language: SpokenLanguage) {
         speak.useLanguage(language)
