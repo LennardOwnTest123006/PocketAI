@@ -46,6 +46,7 @@ import com.pocketai.app.BuildConfig
 import com.pocketai.app.core.DeviceCapabilities
 import com.pocketai.app.core.PerformanceMode
 import com.pocketai.app.data.model.ModelRepository
+import com.pocketai.app.data.repo.SpeakSettings
 import com.pocketai.app.data.repo.AnimationLevel
 import com.pocketai.app.data.repo.CodeTheme
 import com.pocketai.app.data.repo.DarkModePreference
@@ -273,6 +274,59 @@ fun SettingsScreen(
 
             // ---------------------------------------------------- Appearance
             item {
+                SettingsSection("Speak Mode") {
+                    SettingsSwitch(
+                        title = "Answer in the language I speak",
+                        subtitle = "PocketAI detects the language of each spoken turn and " +
+                            "replies in it. Turn off to always use the language you pick in " +
+                            "Speak Mode.",
+                        checked = settings.speak.autoDetectLanguage,
+                        onChange = { scope.launch { prefs.setSpeakAutoDetect(it) } }
+                    )
+                    SettingsSwitch(
+                        title = "Keep the conversation going",
+                        subtitle = "Listen again as soon as PocketAI finishes talking, so a " +
+                            "conversation needs no tapping.",
+                        checked = settings.speak.continuousConversation,
+                        onChange = { scope.launch { prefs.setSpeakContinuous(it) } }
+                    )
+                    SettingsSwitch(
+                        title = "Shorter spoken answers",
+                        subtitle = "A written answer can be skimmed; a spoken one has to be " +
+                            "sat through. Keeps replies to roughly a minute.",
+                        checked = settings.speak.shorterSpokenReplies,
+                        onChange = { scope.launch { prefs.setSpeakShorterReplies(it) } }
+                    )
+                    SettingsSwitch(
+                        title = "On-device speech recognition only",
+                        subtitle = "Refuses recognisers that upload audio. If your phone has " +
+                            "no offline recogniser for a language, Speak Mode will say so " +
+                            "rather than send your voice away.",
+                        checked = settings.speak.onDeviceRecognitionOnly,
+                        onChange = { scope.launch { prefs.setSpeakOnDeviceOnly(it) } }
+                    )
+                    SettingsSlider(
+                        title = "Voice pitch",
+                        value = settings.speak.voicePitch,
+                        range = SpeakSettings.PITCH_RANGE,
+                        format = { "%.2f".format(it) },
+                        onChange = { scope.launch { prefs.setSpeakPitch(it) } }
+                    )
+                    SettingsSlider(
+                        title = "Speaking rate",
+                        value = settings.speak.voiceRate,
+                        range = SpeakSettings.RATE_RANGE,
+                        format = { "%.2f".format(it) },
+                        onChange = { scope.launch { prefs.setSpeakRate(it) } }
+                    )
+                    SettingsRow(
+                        title = "Voices and offline languages",
+                        subtitle = "PocketAI uses the voices Android has installed and picks " +
+                            "the best offline one for each language. Add or download voices " +
+                            "in Android's own text-to-speech settings."
+                    )
+                }
+
                 SettingsSection("Appearance") {
                     ThemePicker(
                         selectedId = settings.themeId,

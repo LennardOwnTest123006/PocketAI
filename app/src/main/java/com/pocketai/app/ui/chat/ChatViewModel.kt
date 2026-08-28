@@ -21,6 +21,10 @@ import com.pocketai.app.llm.SessionResult
 import com.pocketai.app.llm.SummaryMode
 import com.pocketai.app.llm.SystemPrompt
 import com.pocketai.app.llm.ThinkingStreamParser
+import com.pocketai.app.voice.SpeakController
+import com.pocketai.app.voice.SpeakState
+import com.pocketai.app.voice.SpokenLanguage
+import com.pocketai.app.voice.SpokenPrompt
 import com.pocketai.app.web.SearchOutcome
 import com.pocketai.app.web.WebSearchClient
 import kotlinx.coroutines.Job
@@ -36,6 +40,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.io.File
+import java.util.Locale
 
 /** Text currently being produced by the model. */
 data class StreamingState(
@@ -108,6 +113,25 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private var generationJob: Job? = null
     private var publisherJob: Job? = null
     private var warmJob: Job? = null
+
+    /**
+     * Speak Mode. Built lazily because constructing it touches the speech
+     * services, which is wasted work for the many sessions that never use it.
+     */
+    private var speakEverUsed = false
+    private val speak: SpeakController by lazy {
+        speakEverUsed = true
+        SpeakController(getApplication<Application>()) { transcript, language ->
+            onSpokenInput(transcript, language)
+        }
+    }
+    val speakState: StateFlow<SpeakState> get() = speak.state
+
+    /**
+     * Language of the turn currently being answered, when it arrived by voice.
+     * Null for typed messages, which keeps the prompt unchanged for them.
+     */
+    private var spokenLanguage: SpokenLanguage? = null
 
     // Streaming buffers written from the inference thread, published on a timer
     // so the UI recomposes at a steady rate instead of once per token.
@@ -286,6 +310,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         if (state.streaming != null) return
 
         val editing = state.editingMessageId
+        // A typed message carries no spoken language, so the reply is not
+        // steered into whatever was last said out loud.
+        if (!speakState.value.active) spokenLanguage = null
         _uiState.value = state.copy(composerText = "", attachment = null, editingMessageId = null)
 
         viewModelScope.launch {
@@ -315,6 +342,61 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             runGeneration(continueFrom = null)
         }
     }
+
+    // ------------------------------------------------------------ speak mode
+
+    /**
+     * A finished spoken turn. The transcript is stored as an ordinary user
+     * message, so a spoken conversation is a normal conversation: searchable,
+     * exportable, and resumable by typing.
+     */
+    private fun onSpokenInput(transcript: String, language: SpokenLanguage) {
+        spokenLanguage = language
+        _uiState.value = _uiState.value.copy(composerText = transcript, attachment = null)
+        send()
+    }
+
+    fun startSpeakMode() {
+        val speech = settings.value.speak
+        val language = SpokenLanguage.fromTag(speech.languageTag)
+            ?: SpokenLanguage.fromTag(Locale.getDefault().toLanguageTag())
+            ?: SpokenLanguage.ENGLISH
+        speak.start(
+            language = language,
+            autoDetect = speech.autoDetectLanguage,
+            preferOnDeviceRecognition = speech.onDeviceRecognitionOnly,
+            continuousConversation = speech.continuousConversation,
+            pitch = speech.voicePitch,
+            speechRate = speech.voiceRate
+        )
+    }
+
+    fun stopSpeakMode() {
+        speak.stop()
+        spokenLanguage = null
+    }
+
+    /** Cuts PocketAI off mid-sentence and gives the turn straight back. */
+    fun interruptSpeaking() = speak.interrupt()
+
+    /** Re-opens the microphone when continuous conversation is switched off. */
+    fun listenAgain() = speak.listenAgain()
+
+    fun setSpokenLanguage(language: SpokenLanguage) {
+        speak.useLanguage(language)
+        viewModelScope.launch { settingsRepository.setSpeakLanguage(language.tag) }
+    }
+
+    fun setSpeakAutoDetect(enabled: Boolean) {
+        speak.setAutoDetect(enabled)
+        viewModelScope.launch { settingsRepository.setSpeakAutoDetect(enabled) }
+    }
+
+    fun clearSpeakMessages() = speak.clearMessages()
+
+    val speakRecognitionAvailable: Boolean get() = speak.recognitionAvailable
+    val speakOnDeviceAvailable: Boolean get() = speak.onDeviceRecognitionAvailable
+    fun hasMicrophonePermission(): Boolean = speak.hasMicrophonePermission()
 
     private fun buildUserContent(text: String, attachment: ExtractedDocument?): String {
         if (attachment == null) return text
@@ -478,6 +560,15 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             var content = message.content
             if (isLastUser) {
                 if (webBlock != null) content = webBlock + "\n\n" + content
+                // Spoken turns tell the model which language to answer in and
+                // that it is writing for the ear. Kept in the user turn so the
+                // system prompt stays byte-identical and cacheable.
+                spokenLanguage?.let { language ->
+                    content = SpokenPrompt.instruction(
+                        language = language,
+                        shorter = current.speak.shorterSpokenReplies
+                    ) + "\n\n" + content
+                }
                 // Reasoning models accept a per-turn switch; Fast mode uses it so
                 // a one-line question does not pay for a thinking pass.
                 content = mode.applyReasoningSwitch(
@@ -499,10 +590,16 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         // at its own end-of-turn token. It exists so a short question does not
         // get charged for the maximum-length answer the model would otherwise
         // drift into, which is what dominates total response time.
-        val tokenBudget = mode.budgetFor(
+        var tokenBudget = mode.budgetFor(
             userMessage = lastUser?.content.orEmpty(),
             userCeiling = current.generation.maxOutputTokens
         )
+        if (spokenLanguage != null && current.speak.shorterSpokenReplies) {
+            // Spoken answers are bounded by patience, not by the context window.
+            // A synthesiser reads at roughly 150 words a minute, so a 640-token
+            // reply is over three minutes of talking at someone.
+            tokenBudget = tokenBudget.coerceAtMost(SPOKEN_TOKEN_CEILING)
+        }
 
         var prompt = engine.buildPrompt(
             systemPrompt = systemPrompt,
@@ -572,6 +669,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                             insideThinking = inside
                         )
                     )
+                    // Speaking starts on the first finished sentence rather than
+                    // at the end of generation, so the reply is already being
+                    // heard while the rest of it is still being written.
+                    if (speakState.value.active) speak.onAnswerDelta(currentAnswer)
                 }
             }
         }
@@ -601,6 +702,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
         val trimmedAnswer = answer.trim()
         val trimmedThinking = thinking.trim()
+
+        if (speakState.value.active) {
+            // Only the answer is spoken. Reasoning is shown on screen when the
+            // user asked for it, but reading it out loud would bury the reply.
+            if (trimmedAnswer.isNotEmpty()) speak.onAnswerFinished(trimmedAnswer)
+            else speak.onAnswerFailed()
+        }
+
         if (trimmedAnswer.isEmpty() && trimmedThinking.isEmpty()) {
             // Stopped before the model produced anything, or the request failed
             // outright. Either way there is nothing worth writing to the chat.
@@ -690,6 +799,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     override fun onCleared() {
+        if (speakEverUsed) speak.release()
         publisherJob?.cancel()
         generationJob?.cancel()
         engine.stop()
@@ -699,5 +809,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private companion object {
         // ~25 UI updates a second: smooth to read, far cheaper than per-token.
         const val STREAM_PUBLISH_INTERVAL_MS = 40L
+
+        /**
+         * Ceiling for a reply that will be spoken aloud. Roughly 250 words,
+         * which is about a minute and a half of speech - already long for one
+         * conversational turn.
+         */
+        const val SPOKEN_TOKEN_CEILING = 340
     }
 }

@@ -89,7 +89,7 @@ class ModelSessionController(
             modelLabel = model.displayName,
             mode = settings.responseMode
         )
-        return engine.warmPrefix(prompt)
+        return engine.warmSystemPrompt(prompt)
     }
 
     suspend fun unload() = mutex.withLock { engine.unload() }

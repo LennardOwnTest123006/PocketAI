@@ -156,8 +156,42 @@ data class AppSettings(
     val showSources: Boolean = true,
 
     val localOnlyMode: Boolean = false,
-    val showPerformanceStats: Boolean = true
+    val showPerformanceStats: Boolean = true,
+
+    val speak: SpeakSettings = SpeakSettings()
 ) {
     /** Web access is only ever attempted when both switches allow it. */
     val webSearchUsable: Boolean get() = webSearchEnabled && !localOnlyMode
+}
+
+/** Everything Speak Mode remembers between conversations. */
+data class SpeakSettings(
+    /**
+     * Let the language of the reply follow the language that was spoken. Off
+     * means PocketAI always answers in [languageTag].
+     */
+    val autoDetectLanguage: Boolean = true,
+    /** Empty means "follow the phone's language". */
+    val languageTag: String = "",
+    /**
+     * PocketAI's voice signature. Slightly below neutral pitch and a touch under
+     * conversational pace reads as calm and stays intelligible in every
+     * language, including ones whose voices run fast by default.
+     */
+    val voicePitch: Float = 0.96f,
+    val voiceRate: Float = 0.98f,
+    /**
+     * Refuse recognisers that would upload audio. On means Speak Mode only runs
+     * where the phone can transcribe locally, which is the point of the app.
+     */
+    val onDeviceRecognitionOnly: Boolean = true,
+    /** Keep the turn-taking loop going instead of stopping after one answer. */
+    val continuousConversation: Boolean = true,
+    /** Cap spoken replies; a paragraph read aloud is already a long answer. */
+    val shorterSpokenReplies: Boolean = true
+) {
+    companion object {
+        val PITCH_RANGE = 0.7f..1.3f
+        val RATE_RANGE = 0.7f..1.4f
+    }
 }

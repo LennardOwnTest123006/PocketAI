@@ -3,8 +3,14 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Only what PocketAI genuinely needs. There is no location, contacts,
-         camera or storage permission, and no microphone permission: dictation
-         is delegated to the system speech recogniser, which holds its own. -->
+         camera or storage permission.
+
+         RECORD_AUDIO exists solely for Speak Mode, which needs the recogniser
+         bound directly in order to hear when a turn ends and to be interrupted.
+         The dictation button in the composer still uses the system recogniser
+         dialog and needs no permission of ours. Nothing records unless Speak
+         Mode is running, and audio is never written to storage. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -18,6 +24,10 @@
     <queries>
         <intent>
             <action android:name="android.speech.RecognitionService" />
+        </intent>
+        <!-- Needed to enumerate installed voices for Speak Mode. -->
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
         </intent>
         <intent>
             <action android:name="android.intent.action.SEND" />

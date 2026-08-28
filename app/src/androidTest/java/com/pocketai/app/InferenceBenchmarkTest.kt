@@ -107,7 +107,7 @@ class InferenceBenchmarkTest {
         // 2. Warm: the system prompt was pre-evaluated, exactly as the app does
         //    right after loading a model.
         engine.resetContext()
-        val warm = engine.warmPrefix(system)
+        val warm = engine.warmSystemPrompt(system)
         val warmed = run("warm prefix")
 
         // 3. Follow-up: the cache now also holds the previous exchange.

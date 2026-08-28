@@ -46,6 +46,8 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.activity.compose.BackHandler
+import androidx.compose.material.icons.outlined.RecordVoiceOver
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -78,6 +80,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.pocketai.app.ui.speak.SpeakModeOverlay
 import com.pocketai.app.data.repo.ChatMessage
 import com.pocketai.app.data.repo.Conversation
 import com.pocketai.app.llm.ResponseMode
@@ -115,6 +118,7 @@ fun ChatScreen(
     var renameTarget by remember { mutableStateOf<Conversation?>(null) }
     var deleteTarget by remember { mutableStateOf<Conversation?>(null) }
     var overflowOpen by remember { mutableStateOf(false) }
+    var speakMode by remember { mutableStateOf(false) }
 
     fun copy(text: String) {
         clipboard.setText(AnnotatedString(text))
@@ -213,6 +217,14 @@ fun ChatScreen(
                         }
                     },
                     actions = {
+                        if (viewModel.speakRecognitionAvailable) {
+                            IconButton(onClick = { speakMode = true }) {
+                                Icon(
+                                    Icons.Outlined.RecordVoiceOver,
+                                    contentDescription = "Speak with PocketAI"
+                                )
+                            }
+                        }
                         IconButton(onClick = viewModel::newChat) {
                             Icon(Icons.Filled.Add, contentDescription = "New chat")
                         }
@@ -459,6 +471,14 @@ fun ChatScreen(
             onDismiss = { deleteTarget = null },
             onConfirm = { viewModel.deleteConversation(conversation.id) }
         )
+    }
+
+    // Drawn last so it covers the chat completely. The conversation underneath
+    // keeps updating, so closing Speak Mode leaves the spoken exchange in place
+    // to scroll back through.
+    if (speakMode) {
+        SpeakModeOverlay(viewModel = viewModel, onClose = { speakMode = false })
+        BackHandler { viewModel.stopSpeakMode(); speakMode = false }
     }
 }
 

@@ -81,6 +81,12 @@ sealed interface GenerationOutcome {
 data class PromptTurn(val role: ChatRole, val content: String)
 
 /**
+ * Throwaway user turn used only to check that the templated system block really
+ * is a prefix of a full prompt. Never sent to the model for generation.
+ */
+private const val PREFIX_PROBE = "hi"
+
+/**
  * Owns the native llama.cpp session: loading, prompt assembly, streaming
  * generation and cancellation.
  *
@@ -266,6 +272,17 @@ class InferenceEngine(private val context: Context) {
      * just the user's own tokens. Safe to call repeatedly - an already-cached
      * prefix costs nothing.
      */
+    /**
+     * Warms the system prompt as the model will actually see it.
+     *
+     * Callers should prefer this over [warmPrefix]: it resolves the templated
+     * prefix first, which is the only form the later prompt can match on.
+     */
+    suspend fun warmSystemPrompt(systemPrompt: String): WarmResult = withContext(dispatcher) {
+        val prefix = systemPrefix(handle, systemPrompt) ?: return@withContext WarmResult(0, 0, 0)
+        warmPrefix(prefix)
+    }
+
     suspend fun warmPrefix(prefix: String): WarmResult = withContext(dispatcher) {
         val h = handle
         if (h == 0L || prefix.isBlank()) return@withContext WarmResult(0, 0, 0)
@@ -338,7 +355,12 @@ class InferenceEngine(private val context: Context) {
         render(h, systemPrompt, selection.turns)
     }
 
-    private fun render(h: Long, systemPrompt: String, turns: List<PromptTurn>): String {
+    private fun render(
+        h: Long,
+        systemPrompt: String,
+        turns: List<PromptTurn>,
+        addAssistant: Boolean = true
+    ): String {
         val roles = ArrayList<String>(turns.size + 1)
         val contents = ArrayList<String>(turns.size + 1)
         if (systemPrompt.isNotBlank()) {
@@ -349,7 +371,7 @@ class InferenceEngine(private val context: Context) {
         if (h != 0L) {
             val templated = runCatching {
                 LlamaNative.nativeApplyChatTemplate(
-                    h, roles.toTypedArray(), contents.toTypedArray(), true
+                    h, roles.toTypedArray(), contents.toTypedArray(), addAssistant
                 )
             }.getOrNull()
             if (!templated.isNullOrBlank()) return templated
@@ -360,8 +382,31 @@ class InferenceEngine(private val context: Context) {
                 append("<|im_start|>").append(roles[i]).append('\n')
                 append(contents[i]).append("<|im_end|>\n")
             }
-            append("<|im_start|>assistant\n")
+            if (addAssistant) append("<|im_start|>assistant\n")
         }
+    }
+
+    /**
+     * The exact byte prefix every prompt in this conversation will begin with,
+     * or null when the model's template does not have one.
+     *
+     * This has to be the *templated* system block, not the system text itself.
+     * A real prompt starts with the template's own control tokens, so warming
+     * the raw text caches a sequence that shares no prefix with it: the match
+     * finds nothing, the cache is cleared, and the whole prompt is evaluated
+     * again. That is worse than not warming at all, because the warm-up itself
+     * still costs a full prefill.
+     *
+     * Not every template has such a prefix - some fold the system message into
+     * the opening user turn - so this checks rather than assumes, and returns
+     * null when there is nothing stable to warm.
+     */
+    private fun systemPrefix(h: Long, systemPrompt: String): String? {
+        if (h == 0L || systemPrompt.isBlank()) return null
+        val prefix = render(h, systemPrompt, emptyList(), addAssistant = false)
+        if (prefix.isBlank()) return null
+        val probe = render(h, systemPrompt, listOf(PromptTurn(ChatRole.USER, PREFIX_PROBE)))
+        return if (probe.startsWith(prefix)) prefix else null
     }
 
     /**
