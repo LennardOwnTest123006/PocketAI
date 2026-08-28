@@ -285,7 +285,10 @@ jobs:
           disable-animations: true
           # x86_64 only: the emulator cannot run the arm64 libraries, and
           # building both would double the native compile for no benefit.
-          script: ./gradlew --no-daemon connectedDebugAndroidTest -Ppocketai.testAbi=x86_64
+          script: |
+            ./gradlew --no-daemon connectedDebugAndroidTest \
+              -Ppocketai.testAbi=x86_64 \
+              -Pandroid.testInstrumentationRunnerArguments.notClass=com.pocketai.app.InferenceBenchmarkTest
 
       - name: Upload instrumented test reports
         if: always()
@@ -297,3 +300,88 @@ jobs:
             app/build/outputs/androidTest-results/
           if-no-files-found: ignore
           retention-days: 7
+
+  benchmark:
+    name: Inference benchmark
+    # Downloads a real model and measures latency, so it is opt-in: trigger the
+    # workflow manually or put [bench] in the commit message.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.head_commit.message, '[bench]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Check out PocketAI
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install NDK and CMake
+        run: |
+          set -euo pipefail
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+          sdkmanager --install "ndk;${NDK_VERSION}" "cmake;${CMAKE_VERSION}" "platforms;android-35" "build-tools;35.0.0"
+          echo "ANDROID_NDK_HOME=${ANDROID_SDK_ROOT}/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+
+      - name: Cache llama.cpp checkout
+        id: cache-llama
+        uses: actions/cache@v4
+        with:
+          path: app/src/main/cpp/llama.cpp
+          key: llama-cpp-${{ env.LLAMA_CPP_TAG }}
+
+      - name: Fetch llama.cpp
+        if: steps.cache-llama.outputs.cache-hit != 'true'
+        run: LLAMA_CPP_TAG="${LLAMA_CPP_TAG}" ./scripts/fetch_llama_cpp.sh
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Cache x86_64 native build output
+        uses: actions/cache@v4
+        with:
+          path: app/.cxx
+          key: native-x86_64-${{ env.LLAMA_CPP_TAG }}-${{ env.NDK_VERSION }}-${{ hashFiles('app/src/main/cpp/CMakeLists.txt', 'app/src/main/cpp/pocketai_llm.cpp') }}
+          restore-keys: |
+            native-x86_64-${{ env.LLAMA_CPP_TAG }}-${{ env.NDK_VERSION }}-
+
+      - name: Enable KVM for the emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Measure inference latency on an emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          arch: x86_64
+          target: google_apis
+          force-avd-creation: false
+          disk-size: 8G
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: |
+            ./gradlew --no-daemon connectedDebugAndroidTest \
+              -Ppocketai.testAbi=x86_64 \
+              -Pandroid.testInstrumentationRunnerArguments.class=com.pocketai.app.InferenceBenchmarkTest
+            echo "--- benchmark output from logcat ---"
+            adb logcat -d -s PocketAIBench:I || true
+
+      - name: Upload benchmark reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-reports
+          path: app/build/reports/androidTests/
+          if-no-files-found: ignore
+          retention-days: 14
