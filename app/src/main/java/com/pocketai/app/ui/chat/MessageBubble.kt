@@ -31,11 +31,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Bolt
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Language
+import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.Psychology
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -73,7 +76,7 @@ fun MessageBubble(
     showStats: Boolean,
     onCopy: (String) -> Unit,
     onShare: (String) -> Unit,
-    onLongPress: () -> Unit,
+    onOpenActions: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val style = LocalChatStyle.current
@@ -93,8 +96,9 @@ fun MessageBubble(
                 modifier = Modifier
                     .fillMaxWidth(style.maxWidthFraction)
                     .wrapContentWidth(Alignment.End)
-                    .clickable(onClick = onLongPress)
             ) {
+                // Selection is handled by SelectionContainer, so the action menu
+                // lives on its own button rather than competing for the long press.
                 SelectionContainer {
                     MarkdownText(
                         text = message.content,
@@ -113,6 +117,11 @@ fun MessageBubble(
                     modifier = Modifier.padding(top = 3.dp, end = 4.dp)
                 )
             }
+            MessageActionBar(
+                alignEnd = true,
+                onCopy = { onCopy(message.content) },
+                onOpenActions = onOpenActions
+            )
         } else {
             Column(Modifier.fillMaxWidth()) {
                 if (message.usedWebSearch) {
@@ -136,9 +145,7 @@ fun MessageBubble(
                             textColor = style.aiText,
                             onCopy = onCopy,
                             onShare = onShare,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable(onClick = onLongPress)
+                            modifier = Modifier.fillMaxWidth()
                         )
                     }
                 }
@@ -156,7 +163,43 @@ fun MessageBubble(
                         modelName = message.modelName
                     )
                 }
+                MessageActionBar(
+                    alignEnd = false,
+                    onCopy = { onCopy(message.content) },
+                    onOpenActions = onOpenActions
+                )
             }
+        }
+    }
+}
+
+/** Quick copy plus the full action menu, as explicit controls. */
+@Composable
+private fun MessageActionBar(
+    alignEnd: Boolean,
+    onCopy: () -> Unit,
+    onOpenActions: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = if (alignEnd) Arrangement.End else Arrangement.Start,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(onClick = onCopy, modifier = Modifier.size(32.dp)) {
+            Icon(
+                Icons.Outlined.ContentCopy,
+                contentDescription = "Copy message",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(15.dp)
+            )
+        }
+        IconButton(onClick = onOpenActions, modifier = Modifier.size(32.dp)) {
+            Icon(
+                Icons.Outlined.MoreHoriz,
+                contentDescription = "Message actions",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(17.dp)
+            )
         }
     }
 }

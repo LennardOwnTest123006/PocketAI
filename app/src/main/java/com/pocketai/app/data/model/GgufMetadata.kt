@@ -177,14 +177,13 @@ data class GgufMetadata(
             val bytes = ByteArray(len.toInt())
             var read = 0
             while (read < bytes.size) {
-                val remaining = (bufStart + bufLimit - position).toInt()
-                if (remaining <= 0) {
-                    fill(position)
-                    if (bufLimit <= 0) return null
-                    continue
-                }
+                // ensure() may refill the buffer, so only measure what is
+                // available afterwards - otherwise a string straddling a buffer
+                // boundary reads past the end of the window.
                 ensure(1)
-                val take = minOf(remaining, bytes.size - read)
+                val available = (bufStart + bufLimit - position).toInt()
+                if (available <= 0) return null
+                val take = minOf(available, bytes.size - read)
                 buf.get(bytes, read, take)
                 read += take
                 position += take

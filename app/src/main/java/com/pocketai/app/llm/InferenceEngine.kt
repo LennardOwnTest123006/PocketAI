@@ -178,7 +178,7 @@ class InferenceEngine(private val context: Context) {
                     useMmap = settings.useMmap,
                     useMlock = settings.useMlock,
                     flashAttn = settings.flashAttention,
-                    progress = { p ->
+                    progress = LoadProgressListener { p ->
                         val clamped = p.coerceIn(0f, 1f)
                         _state.value = _state.value.copy(loadProgress = clamped)
                         onProgress(clamped)
@@ -351,7 +351,7 @@ class InferenceEngine(private val context: Context) {
                     repeatLastN = settings.generation.repeatLastN,
                     seed = settings.generation.seed,
                     nThreads = resolveThreads(settings, caps),
-                    callback = { piece -> onToken(piece) }
+                    callback = TokenListener { piece -> onToken(piece) }
                 )
             }
             parseOutcome(raw)

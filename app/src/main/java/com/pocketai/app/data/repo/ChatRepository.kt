@@ -7,6 +7,8 @@ import com.pocketai.app.data.db.MessageDao
 import com.pocketai.app.data.db.MessageEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 /**
