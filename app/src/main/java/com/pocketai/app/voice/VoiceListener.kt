@@ -165,13 +165,14 @@ class VoiceListener(private val context: Context) {
         onDevice = recognizerIsOnDevice == true
         sawResult = false
         runCatching { engine.startListening(buildIntent(onDevice)) }
+            .onSuccess { _listening.value = true }
             .onFailure {
                 Log.w(TAG, "startListening failed", it)
+                _listening.value = false
                 listener.onListenError(
                     "Could not start listening.", ListenErrorKind.TRANSIENT
                 )
             }
-        _listening.value = true
     }
 
     private fun buildIntent(useOnDevice: Boolean): Intent =

@@ -80,6 +80,10 @@ class SpeakController(
     private var onDeviceOnly = false
     /** Runtime flag: the on-device recogniser could not do the language, so use online. */
     private var forceOnline = false
+    /** True between button press and release: the mic must stay open the whole time. */
+    private var held = false
+    /** Restarts within the current hold, to bound a fast error loop and trigger fallback. */
+    private var restartsThisHold = 0
 
     val recognitionAvailable: Boolean get() = listener.isAvailable()
     val onDeviceRecognitionAvailable: Boolean get() = listener.onDeviceAvailable()
@@ -95,6 +99,7 @@ class SpeakController(
     ) {
         onDeviceOnly = onDeviceRecognitionOnly
         forceOnline = false
+        held = false
         speaker.pitch = pitch
         speaker.speechRate = speechRate
         _state.value = _state.value.copy(
@@ -117,6 +122,7 @@ class SpeakController(
     }
 
     fun stop() {
+        held = false
         listener.stop()
         speaker.stop()
         chunker.reset()
@@ -200,6 +206,8 @@ class SpeakController(
             SpeakPhase.SPEAKING -> speaker.stop()
             else -> Unit
         }
+        held = true
+        restartsThisHold = 0
         beginListening()
     }
 
@@ -209,9 +217,44 @@ class SpeakController(
             main.post { holdEnd() }
             return
         }
-        if (_state.value.phase == SpeakPhase.LISTENING) {
+        held = false
+        if (listener.listening.value) {
+            // Actively capturing: ask for the final result. onResults follows
+            // with either the transcript or a blank ("did not catch that").
             listener.finishListening()
+        } else if (_state.value.phase == SpeakPhase.LISTENING) {
+            // Released during a restart gap, so nothing is being captured and no
+            // result will arrive. Return to idle rather than hang on "Release".
+            _state.value = _state.value.copy(phase = SpeakPhase.IDLE, partial = "", level = 0f)
         }
+    }
+
+    /**
+     * The recogniser quit before the button was released. While the finger is
+     * still down the microphone must stay open, so restart it - after a short
+     * beat to avoid a tight loop, and switching to the online recogniser if the
+     * on-device one keeps failing.
+     */
+    private fun restartWhileHeld() {
+        if (!held || !_state.value.active) return
+        restartsThisHold++
+        if (restartsThisHold >= MAX_RESTARTS_PER_HOLD) {
+            held = false
+            _state.value = _state.value.copy(
+                phase = SpeakPhase.IDLE, partial = "", level = 0f,
+                notice = "The recogniser would not start. Hold to talk and try again."
+            )
+            return
+        }
+        // If the on-device recogniser stumbles a couple of times, stop trusting it
+        // for the rest of this session and use the online one, which is reliable.
+        if (restartsThisHold >= ON_DEVICE_PATIENCE && !forceOnline && !onDeviceOnly) {
+            forceOnline = true
+            _state.value = _state.value.copy(recognitionOnDevice = false)
+        }
+        main.postDelayed({
+            if (held && _state.value.active) beginListening()
+        }, RESTART_DELAY_MS)
     }
 
     private val listenerImpl = object : VoiceListener.Listener {
@@ -220,6 +263,7 @@ class SpeakController(
         }
 
         override fun onFinalTranscript(text: String) {
+            held = false
             val language = resolveLanguage(text)
             _state.value = _state.value.copy(
                 phase = SpeakPhase.THINKING,
@@ -243,6 +287,7 @@ class SpeakController(
             when (kind) {
                 ListenErrorKind.PERMISSION, ListenErrorKind.UNAVAILABLE -> {
                     // Only the user can fix these, so stop and say why.
+                    held = false
                     _state.value = _state.value.copy(
                         phase = SpeakPhase.ERROR, active = false, error = message
                     )
@@ -250,25 +295,22 @@ class SpeakController(
                 }
 
                 ListenErrorKind.LANGUAGE_UNAVAILABLE -> {
-                    // The on-device recogniser has no pack for this language. Note
-                    // it so the next hold uses the online recogniser, which does.
+                    // The on-device recogniser has no pack for this language. Switch
+                    // to the online one, which does, and keep listening if still held.
                     if (!forceOnline && !onDeviceOnly) {
                         forceOnline = true
                         _state.value = _state.value.copy(
                             recognitionOnDevice = false,
-                            phase = SpeakPhase.IDLE,
-                            partial = "",
-                            level = 0f,
-                            notice = "No offline ${_state.value.language.englishName} pack is " +
-                                "installed. Hold to talk again and Speak Mode will use online " +
-                                "recognition. Install it in Android Settings > General " +
-                                "management > Voice input to keep it on-device."
+                            notice = "No offline ${_state.value.language.englishName} pack; " +
+                                "using online recognition. Install it in Android Settings > " +
+                                "General management > Voice input to keep it on-device."
                         )
+                        if (held) restartWhileHeld()
+                        else _state.value = _state.value.copy(phase = SpeakPhase.IDLE)
                     } else {
+                        held = false
                         _state.value = _state.value.copy(
-                            phase = SpeakPhase.IDLE,
-                            partial = "",
-                            level = 0f,
+                            phase = SpeakPhase.IDLE, partial = "", level = 0f,
                             notice = "This phone cannot recognise " +
                                 "${_state.value.language.englishName} speech. Pick another " +
                                 "language, or turn off \"on-device only\" in Speak Mode settings."
@@ -276,22 +318,18 @@ class SpeakController(
                     }
                 }
 
-                ListenErrorKind.NO_SPEECH -> {
-                    _state.value = _state.value.copy(
-                        phase = SpeakPhase.IDLE,
-                        partial = "",
-                        level = 0f,
-                        notice = "I did not catch that. Hold the button and speak."
-                    )
-                }
-
-                ListenErrorKind.TRANSIENT -> {
-                    _state.value = _state.value.copy(
-                        phase = SpeakPhase.IDLE,
-                        partial = "",
-                        level = 0f,
-                        notice = "The recogniser hit a snag. Hold to talk and try again."
-                    )
+                ListenErrorKind.NO_SPEECH, ListenErrorKind.TRANSIENT -> {
+                    if (held) {
+                        // Finger still down: the mic must stay open. Restart it.
+                        restartWhileHeld()
+                    } else {
+                        _state.value = _state.value.copy(
+                            phase = SpeakPhase.IDLE, partial = "", level = 0f,
+                            notice = if (kind == ListenErrorKind.NO_SPEECH)
+                                "I did not catch that. Hold the button and speak."
+                            else "The recogniser hit a snag. Hold to talk and try again."
+                        )
+                    }
                 }
             }
         }
@@ -347,12 +385,14 @@ class SpeakController(
     /** Generation failed; return to IDLE so the user can hold and try again. */
     fun onAnswerFailed() {
         if (!_state.value.active) return
+        held = false
         chunker.reset()
         _state.value = _state.value.copy(phase = SpeakPhase.IDLE, level = 0f)
     }
 
     /** Stops PocketAI mid-sentence and returns to IDLE, ready for the next hold. */
     fun interrupt() {
+        held = false
         speaker.stop()
         if (_state.value.active) {
             _state.value = _state.value.copy(phase = SpeakPhase.IDLE, level = 0f)
@@ -395,4 +435,13 @@ class SpeakController(
         else -> SpeakableText.DEFAULT_CODE_NOTE
     }
 
+
+    private companion object {
+        /** Beat between a premature recogniser stop and reopening, while held. */
+        const val RESTART_DELAY_MS = 150L
+        /** On-device stumbles allowed before switching to the online recogniser. */
+        const val ON_DEVICE_PATIENCE = 2
+        /** Hard cap on restarts within one hold, so a dead recogniser cannot spin. */
+        const val MAX_RESTARTS_PER_HOLD = 40
+    }
 }
