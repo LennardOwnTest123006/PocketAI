@@ -87,6 +87,10 @@ class InferenceBenchmarkTest {
             return when (val outcome = engine.generate(prompt, settings, caps, MAX_TOKENS) { streamed++ }) {
                 is GenerationOutcome.Success -> {
                     assertTrue("nothing was streamed to the UI callback", streamed > 0)
+                    // Emit immediately rather than only in the closing summary, so a
+                    // measurement survives anything that goes wrong later in the run.
+                    Log.i(TAG, describe(label, outcome.stats))
+                    println(describe(label, outcome.stats))
                     outcome.stats.also { results.add(Measurement(label, it)) }
                 }
                 is GenerationOutcome.Failure -> {
@@ -135,6 +139,31 @@ class InferenceBenchmarkTest {
         engine.shutdown()
     }
 
+    /**
+     * One measurement as a single line.
+     *
+     * Built with plain string templates on purpose: a format-specifier mistake
+     * here would throw at the point where the numbers are reported, destroying a
+     * measurement that had already been taken.
+     */
+    private fun describe(label: String, s: GenerationStats): String = buildString {
+        append(label.padEnd(16))
+        append(" ttft=").append(s.firstTokenMs).append(" ms")
+        append("  total=").append(s.totalMs).append(" ms")
+        append("  prompt=").append(s.promptTokens)
+        append(" (cached ").append(s.cachedTokens)
+        append(" / eval ").append(s.evaluatedTokens).append(")")
+        append("  prefill=").append(round1(s.promptTokensPerSecond)).append(" tok/s")
+        append("  gen=").append(s.generatedTokens)
+        append(" @ ").append(round1(s.tokensPerSecond)).append(" tok/s")
+        append("  stop=").append(s.stopReason.ifBlank { "-" })
+    }
+
+    private fun round1(value: Double): String {
+        val scaled = Math.round(value * 10.0)
+        return "${scaled / 10}.${scaled % 10}"
+    }
+
     private fun report(
         loadMs: Long,
         warmTokens: Int,
@@ -143,19 +172,9 @@ class InferenceBenchmarkTest {
     ) {
         val sb = StringBuilder()
         sb.appendLine("=== PocketAI inference benchmark (CI emulator, x86_64) ===")
-        sb.appendLine("model load: ${loadMs} ms")
-        sb.appendLine("warm prefix: $warmTokens tokens in ${warmMs} ms")
-        results.forEach { (label, s) ->
-            sb.appendLine(
-                "%-16s ttft=%5d ms  total=%6d ms  prompt=%4d (cached %4d / eval %4d) %7.1f tok/s prefill" +
-                    "  gen=%3d %6.2f tok/s  stop=%s"
-                    .format(
-                        label, s.firstTokenMs, s.totalMs, s.promptTokens, s.cachedTokens,
-                        s.evaluatedTokens, s.promptTokensPerSecond, s.generatedTokens,
-                        s.tokensPerSecond, s.stopReason
-                    )
-            )
-        }
+        sb.appendLine("model load: $loadMs ms")
+        sb.appendLine("warm prefix: $warmTokens tokens in $warmMs ms")
+        results.forEach { (label, s) -> sb.appendLine(describe(label, s)) }
         sb.appendLine("=========================================================")
         // Printed to both logcat and the Gradle test output so the numbers end
         // up in the CI log rather than only in a report artifact.
