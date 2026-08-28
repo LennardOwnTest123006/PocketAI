@@ -564,8 +564,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val failure = outcome as? GenerationOutcome.Failure
 
         val trimmedAnswer = answer.trim()
-        if (trimmedAnswer.isEmpty() && failure != null) {
-            _uiState.value = _uiState.value.copy(error = failure.message)
+        val trimmedThinking = thinking.trim()
+        if (trimmedAnswer.isEmpty() && trimmedThinking.isEmpty()) {
+            // Stopped before the model produced anything, or the request failed
+            // outright. Either way there is nothing worth writing to the chat.
+            if (failure != null) _uiState.value = _uiState.value.copy(error = failure.message)
             return
         }
 
@@ -574,7 +577,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             chats.updateMessage(
                 continuedFrom.copy(
                     content = (continuedFrom.content + trimmedAnswer).trim(),
-                    thinking = listOfNotNull(continuedFrom.thinking, thinking.trim().ifBlank { null })
+                    thinking = listOfNotNull(continuedFrom.thinking, trimmedThinking.ifBlank { null })
                         .joinToString("\n").ifBlank { null },
                     stats = stats
                 )
@@ -584,8 +587,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 ChatMessage(
                     conversationId = conversationId,
                     role = ChatRole.ASSISTANT,
-                    content = trimmedAnswer.ifEmpty { "(no output)" },
-                    thinking = thinking.trim().ifBlank { null },
+                    content = trimmedAnswer,
+                    thinking = trimmedThinking.ifBlank { null },
                     modelName = modelName,
                     stats = stats,
                     usedWebSearch = usedWeb,

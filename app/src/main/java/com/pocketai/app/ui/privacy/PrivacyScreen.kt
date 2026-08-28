@@ -65,7 +65,8 @@ data class PrivacyStats(
     val messageCount: Int = 0,
     val modelCount: Int = 0,
     val modelBytes: Long = 0,
-    val freeStorage: Long = 0
+    val freeStorage: Long = 0,
+    val appBytes: Long = 0
 )
 
 class PrivacyViewModel(application: Application) : AndroidViewModel(application) {
@@ -91,10 +92,16 @@ class PrivacyViewModel(application: Application) : AndroidViewModel(application)
                 messageCount = container.chatRepository.messageCount(),
                 modelCount = models.size,
                 modelBytes = models.sumOf { it.sizeBytes },
-                freeStorage = container.deviceCapabilities().availableStorageBytes
+                freeStorage = container.deviceCapabilities().availableStorageBytes,
+                appBytes = installedAppSize()
             )
         }
     }
+
+    /** Size of the installed APK itself, so storage figures add up for the user. */
+    private fun installedAppSize(): Long = runCatching {
+        java.io.File(getApplication<Application>().applicationInfo.sourceDir).length()
+    }.getOrDefault(0L)
 
     fun deleteConversations(onDone: (String) -> Unit) {
         viewModelScope.launch {
@@ -234,6 +241,10 @@ fun PrivacyScreen(viewModel: PrivacyViewModel, onBack: () -> Unit) {
                         "Models",
                         "${stats.modelCount} file(s) · ${ModelRepository.formatBytes(stats.modelBytes)} " +
                             "in app-private storage"
+                    )
+                    SettingsRow(
+                        "PocketAI itself",
+                        ModelRepository.formatBytes(stats.appBytes) + " of application code"
                     )
                     SettingsRow(
                         "Free storage",

@@ -485,7 +485,13 @@ Java_com_pocketai_app_llm_LlamaNative_nativeGenerate(
         common++;
     }
     llama_memory_t mem = llama_get_memory(s->ctx);
-    llama_memory_seq_rm(mem, 0, (llama_pos) common, -1);
+    // Some architectures (recurrent models, sliding-window attention) cannot
+    // drop a partial sequence. If the trim is refused, start from a clean cache
+    // rather than decoding against stale state.
+    if (!llama_memory_seq_rm(mem, 0, (llama_pos) common, -1)) {
+        llama_memory_clear(mem, true);
+        common = 0;
+    }
     s->cached.resize(common);
 
     // ---- prompt ingest ----------------------------------------------------

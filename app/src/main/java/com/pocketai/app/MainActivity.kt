@@ -12,7 +12,6 @@ import com.pocketai.app.data.repo.AppSettings
 import com.pocketai.app.ui.PocketAiNavigation
 import com.pocketai.app.ui.theme.PocketTheme
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
@@ -36,9 +35,6 @@ class MainActivity : ComponentActivity() {
         splash.setKeepOnScreenCondition { settingsState.value == null }
 
         val container = (application as PocketAiApplication).container
-        lifecycleScope.launch {
-            settingsState.value = container.settingsRepository.settings.first()
-        }
         lifecycleScope.launch {
             container.settingsRepository.settings.collect { settingsState.value = it }
         }

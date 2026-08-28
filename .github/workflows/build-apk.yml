@@ -12,6 +12,9 @@ on:
         required: false
         default: "false"
 
+permissions:
+  contents: write
+
 concurrency:
   group: build-apk-${{ github.ref }}
   cancel-in-progress: true
@@ -156,6 +159,55 @@ jobs:
           path: PocketAI.apk
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish PocketAI.apk as a release asset
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="build-${GITHUB_RUN_NUMBER}"
+
+          echo "Creating release ${TAG}"
+          BODY="Release build of PocketAI from commit ${GITHUB_SHA}. Signed, arm64-v8a, ready to install."
+          python3 - "$TAG" "$BODY" > payload.json <<'PY'
+          import json, os, sys
+          json.dump({
+              "tag_name": sys.argv[1],
+              "target_commitish": os.environ["GITHUB_SHA"],
+              "name": "PocketAI " + sys.argv[1],
+              "body": sys.argv[2],
+              "draft": False,
+              "prerelease": True,
+          }, sys.stdout)
+          PY
+
+          curl -sS -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases" \
+            --data-binary @payload.json -o release.json
+
+          UPLOAD_URL="$(python3 -c "import json;d=json.load(open('release.json'));print(d.get('upload_url','').split('{')[0])")"
+          if [ -z "${UPLOAD_URL}" ]; then
+            echo "Release creation failed:"; cat release.json; exit 1
+          fi
+
+          curl -sS -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Content-Type: application/vnd.android.package-archive" \
+            --data-binary @PocketAI.apk \
+            "${UPLOAD_URL}?name=PocketAI.apk" -o asset.json
+
+          python3 - <<'PY'
+          import json
+          d = json.load(open('asset.json'))
+          if 'browser_download_url' not in d:
+              print("Asset upload failed:", d)
+              raise SystemExit(1)
+          print("APK_ASSET_ID", d['id'])
+          print("APK_DOWNLOAD_URL", d['browser_download_url'])
+          print("APK_SIZE", d['size'])
+          PY
 
       - name: Upload build reports on failure
         if: failure()
