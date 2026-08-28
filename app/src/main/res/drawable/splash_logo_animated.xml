@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A short, deliberately restrained splash: the AI core snaps into the pocket. -->
+<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/splash_logo">
+    <target android:name="spark" android:animation="@animator/splash_spark_scale_x" />
+    <target android:name="spark" android:animation="@animator/splash_spark_scale_y" />
+    <target android:name="spark" android:animation="@animator/splash_spark_rotate" />
+    <target android:name="core" android:animation="@animator/splash_core_fade" />
+</animated-vector>

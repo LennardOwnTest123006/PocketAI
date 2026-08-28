@@ -1,0 +1,160 @@
+name: Build PocketAI APK
+
+on:
+  push:
+    branches:
+      - "claude/**"
+      - main
+  workflow_dispatch:
+    inputs:
+      vulkan:
+        description: "Build the ggml Vulkan GPU backend as well"
+        required: false
+        default: "false"
+
+concurrency:
+  group: build-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  LLAMA_CPP_TAG: b6100
+  NDK_VERSION: 27.2.12479018
+  CMAKE_VERSION: 3.22.1
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Check out PocketAI
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install NDK and CMake
+        run: |
+          set -euo pipefail
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+          sdkmanager --install "ndk;${NDK_VERSION}" "cmake;${CMAKE_VERSION}" "platforms;android-35" "build-tools;35.0.0"
+          echo "ANDROID_NDK_HOME=${ANDROID_SDK_ROOT}/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+
+      - name: Cache llama.cpp checkout
+        id: cache-llama
+        uses: actions/cache@v4
+        with:
+          path: app/src/main/cpp/llama.cpp
+          key: llama-cpp-${{ env.LLAMA_CPP_TAG }}
+
+      - name: Fetch llama.cpp
+        if: steps.cache-llama.outputs.cache-hit != 'true'
+        run: LLAMA_CPP_TAG="${LLAMA_CPP_TAG}" ./scripts/fetch_llama_cpp.sh
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Cache native build output
+        uses: actions/cache@v4
+        with:
+          path: |
+            app/.cxx
+            ~/.ccache
+          key: native-${{ env.LLAMA_CPP_TAG }}-${{ env.NDK_VERSION }}-${{ hashFiles('app/src/main/cpp/CMakeLists.txt', 'app/src/main/cpp/pocketai_llm.cpp') }}
+          restore-keys: |
+            native-${{ env.LLAMA_CPP_TAG }}-${{ env.NDK_VERSION }}-
+
+      - name: Run unit tests
+        run: ./gradlew --no-daemon testReleaseUnitTest
+
+      - name: Generate a release signing key
+        # The key is created inside the job and never committed. It exists only
+        # so the produced APK is installable; it is not a distribution key.
+        run: |
+          set -euo pipefail
+          KEYSTORE_PASSWORD="$(openssl rand -base64 24)"
+          keytool -genkeypair \
+            -keystore "${RUNNER_TEMP}/pocketai.keystore" \
+            -alias pocketai \
+            -keyalg RSA -keysize 4096 -validity 10000 \
+            -storepass "${KEYSTORE_PASSWORD}" \
+            -keypass "${KEYSTORE_PASSWORD}" \
+            -dname "CN=PocketAI, OU=PocketAI, O=PocketAI, L=, ST=, C=DE"
+          echo "::add-mask::${KEYSTORE_PASSWORD}"
+          {
+            echo "POCKETAI_KEYSTORE=${RUNNER_TEMP}/pocketai.keystore"
+            echo "POCKETAI_KEYSTORE_PASSWORD=${KEYSTORE_PASSWORD}"
+            echo "POCKETAI_KEY_ALIAS=pocketai"
+            echo "POCKETAI_KEY_PASSWORD=${KEYSTORE_PASSWORD}"
+          } >> "$GITHUB_ENV"
+
+      - name: Build release APK
+        run: |
+          ./gradlew --no-daemon assembleRelease \
+            -Ppocketai.vulkan=${{ github.event.inputs.vulkan || 'false' }}
+
+      - name: Verify the APK
+        run: |
+          set -euo pipefail
+          APK="$(find app/build/outputs/apk/release -name '*.apk' | head -n1)"
+          test -n "$APK"
+          cp "$APK" "${GITHUB_WORKSPACE}/PocketAI.apk"
+
+          BUILD_TOOLS="$(ls -d "${ANDROID_SDK_ROOT}"/build-tools/* | sort -V | tail -n1)"
+          echo "Using build tools: ${BUILD_TOOLS}"
+
+          echo "=== Signature ==="
+          "${BUILD_TOOLS}/apksigner" verify --verbose --print-certs PocketAI.apk
+
+          echo "=== Manifest ==="
+          "${BUILD_TOOLS}/aapt2" dump badging PocketAI.apk | head -25
+
+          echo "=== Native libraries ==="
+          unzip -l PocketAI.apk | grep -E '\.so$' || (echo "no native libraries packaged" && exit 1)
+
+          echo "=== ABI check ==="
+          if unzip -l PocketAI.apk | grep -q 'lib/arm64-v8a/'; then
+            echo "arm64-v8a present"
+          else
+            echo "arm64-v8a MISSING"; exit 1
+          fi
+
+          echo "=== Required libraries ==="
+          for lib in libpocketai_llm.so libllama.so libggml.so libggml-base.so libc++_shared.so; do
+            if unzip -l PocketAI.apk | grep -q "$lib"; then
+              echo "ok: $lib"
+            else
+              echo "MISSING: $lib"; exit 1
+            fi
+          done
+
+          echo "=== ggml CPU backend variants ==="
+          unzip -l PocketAI.apk | grep -c 'libggml-cpu-' || true
+
+          echo "=== Size ==="
+          ls -lh PocketAI.apk
+
+      - name: Upload PocketAI.apk
+        uses: actions/upload-artifact@v4
+        with:
+          name: PocketAI-apk
+          path: PocketAI.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload build reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-reports
+          path: |
+            app/build/reports/
+            app/build/outputs/logs/
+          if-no-files-found: ignore
+          retention-days: 7

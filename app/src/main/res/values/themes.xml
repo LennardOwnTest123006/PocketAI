@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Compose supplies all real styling; this only covers the window before
+         the first frame and the system splash. -->
+    <style name="Theme.PocketAI" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/pocket_ink_light</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+
+    <style name="Theme.PocketAI.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/pocket_ink</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_logo_animated</item>
+        <item name="windowSplashScreenAnimationDuration">600</item>
+        <item name="postSplashScreenTheme">@style/Theme.PocketAI</item>
+    </style>
+</resources>

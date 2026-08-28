@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="pocket_ink">#FF0E0E1F</color>
+    <color name="pocket_ink_light">#FFFBFAFF</color>
+    <color name="pocket_blue">#FF2D6BFF</color>
+    <color name="pocket_violet">#FF7B5CFF</color>
+    <color name="pocket_cyan">#FF35D6E8</color>
+</resources>

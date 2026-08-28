@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Pocket silhouette: a rounded square with a hem across the top. -->
+    <path
+        android:pathData="M42,29h24a13,13 0 0 1 13,13v24a13,13 0 0 1 -13,13h-24a13,13 0 0 1 -13,-13v-24a13,13 0 0 1 13,-13z"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round">
+        <aapt:attr xmlns:aapt="http://schemas.android.com/aapt" name="android:strokeColor">
+            <gradient
+                android:startX="29" android:startY="29"
+                android:endX="79" android:endY="79"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#FF2D6BFF" />
+                <item android:offset="0.5" android:color="#FF7B5CFF" />
+                <item android:offset="1.0" android:color="#FF35D6E8" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Pocket hem -->
+    <path
+        android:pathData="M31,45h46"
+        android:strokeWidth="4"
+        android:strokeLineCap="round"
+        android:strokeColor="#B37B5CFF" />
+
+    <!-- Circuit traces feeding the core -->
+    <path
+        android:pathData="M36,62h6M66,62h6"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:strokeColor="#8035D6E8" />
+
+    <!-- AI core: a four-pointed spark -->
+    <path
+        android:pathData="M54,50c1.7,6.6 3.4,8.3 10,10c-6.6,1.7 -8.3,3.4 -10,10c-1.7,-6.6 -3.4,-8.3 -10,-10c6.6,-1.7 8.3,-3.4 10,-10z">
+        <aapt:attr xmlns:aapt="http://schemas.android.com/aapt" name="android:fillColor">
+            <gradient
+                android:startX="44" android:startY="50"
+                android:endX="64" android:endY="70"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#FFB9E6FF" />
+                <item android:offset="0.55" android:color="#FF7B5CFF" />
+                <item android:offset="1.0" android:color="#FF35D6E8" />
+            </gradient>
+        </aapt:attr>
+    </path>
+</vector>

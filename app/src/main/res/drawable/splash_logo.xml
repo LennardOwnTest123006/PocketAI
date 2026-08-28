@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="288dp"
+    android:height="288dp"
+    android:viewportWidth="288"
+    android:viewportHeight="288">
+
+    <group
+        android:name="logo"
+        android:scaleX="1.9"
+        android:scaleY="1.9"
+        android:translateX="41.4"
+        android:translateY="41.4">
+
+        <path
+            android:name="pocket"
+            android:pathData="M42,29h24a13,13 0 0 1 13,13v24a13,13 0 0 1 -13,13h-24a13,13 0 0 1 -13,-13v-24a13,13 0 0 1 13,-13z"
+            android:strokeWidth="5"
+            android:strokeLineJoin="round"
+            android:strokeLineCap="round">
+            <aapt:attr xmlns:aapt="http://schemas.android.com/aapt" name="android:strokeColor">
+                <gradient
+                    android:startX="29" android:startY="29"
+                    android:endX="79" android:endY="79"
+                    android:type="linear">
+                    <item android:offset="0.0" android:color="#FF2D6BFF" />
+                    <item android:offset="0.5" android:color="#FF7B5CFF" />
+                    <item android:offset="1.0" android:color="#FF35D6E8" />
+                </gradient>
+            </aapt:attr>
+        </path>
+
+        <path
+            android:name="hem"
+            android:pathData="M31,45h46"
+            android:strokeWidth="4"
+            android:strokeLineCap="round"
+            android:strokeColor="#B37B5CFF" />
+
+        <path
+            android:name="traces"
+            android:pathData="M36,62h6M66,62h6"
+            android:strokeWidth="3"
+            android:strokeLineCap="round"
+            android:strokeColor="#8035D6E8" />
+
+        <group
+            android:name="spark"
+            android:pivotX="54"
+            android:pivotY="60">
+            <path
+                android:name="core"
+                android:pathData="M54,50c1.7,6.6 3.4,8.3 10,10c-6.6,1.7 -8.3,3.4 -10,10c-1.7,-6.6 -3.4,-8.3 -10,-10c6.6,-1.7 8.3,-3.4 10,-10z">
+                <aapt:attr xmlns:aapt="http://schemas.android.com/aapt" name="android:fillColor">
+                    <gradient
+                        android:startX="44" android:startY="50"
+                        android:endX="64" android:endY="70"
+                        android:type="linear">
+                        <item android:offset="0.0" android:color="#FFB9E6FF" />
+                        <item android:offset="0.55" android:color="#FF7B5CFF" />
+                        <item android:offset="1.0" android:color="#FF35D6E8" />
+                    </gradient>
+                </aapt:attr>
+            </path>
+        </group>
+    </group>
+</vector>
