@@ -141,9 +141,34 @@ class SpeechChunkerTest {
     @Test
     fun `the final unterminated sentence is still spoken`() {
         // Models often stop without a full stop, or get cut off at the budget.
+        // It gains one here so the voice ends on a falling note instead of
+        // trailing off as though more were coming.
         val chunker = SpeechChunker()
         chunker.next("All good. Now something else")
-        assertEquals("Now something else", chunker.remainder("All good. Now something else"))
+        assertEquals("Now something else.", chunker.remainder("All good. Now something else"))
+    }
+
+    @Test
+    fun `a half-written sentence is never spoken early`() {
+        // Every line is given a full stop so list items are heard separately,
+        // which mid-stream would turn the growing tail into a finished
+        // sentence and have the voice stammer it out a fragment at a time.
+        val chunker = SpeechChunker()
+        assertEquals(emptyList<String>(), chunker.next("The capital of France"))
+        assertEquals(emptyList<String>(), chunker.next("The capital of France is"))
+        assertEquals(
+            listOf("The capital of France is Paris."),
+            chunker.next("The capital of France is Paris. It has")
+        )
+    }
+
+    @Test
+    fun `list items are still separated once they are complete`() {
+        val chunker = SpeechChunker()
+        val spoken = chunker.next("- first item
+- second item
+- third")
+        assertEquals(listOf("first item.", "second item."), spoken)
     }
 
     @Test

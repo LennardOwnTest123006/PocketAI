@@ -33,8 +33,20 @@ object SpeakableText {
         return if (open >= 0) markdown.substring(0, open) else markdown
     }
 
-    /** Strips Markdown down to prose a synthesiser can read straight out. */
-    fun normalize(markdown: String, codeBlockNote: String = DEFAULT_CODE_NOTE): String {
+    /**
+     * Strips Markdown down to prose a synthesiser can read straight out.
+     *
+     * [terminateLastLine] must be false while text is still arriving. Each line
+     * is given a full stop so that list items are heard as separate statements
+     * rather than one breathless sentence - but doing that to the last line of a
+     * half-written answer invents a sentence boundary that is not there, and the
+     * chunker would speak the fragment before the rest of it exists.
+     */
+    fun normalize(
+        markdown: String,
+        codeBlockNote: String = DEFAULT_CODE_NOTE,
+        terminateLastLine: Boolean = true
+    ): String {
         var text = markdown
 
         // Fenced code: announce once, never read out.
@@ -46,11 +58,11 @@ object SpeakableText {
         text = BARE_URL.replace(text) { " " }
         text = INLINE_CODE.replace(text) { it.groupValues[1] }
 
-        val out = StringBuilder()
+        val spoken = ArrayList<String>()
         for (rawLine in text.lines()) {
             var line = rawLine.trim()
 
-            if (line.isEmpty()) { out.append('\n'); continue }
+            if (line.isEmpty()) continue
             // A rule is a visual device with nothing to say.
             if (HORIZONTAL_RULE.matches(line)) continue
             // Table rows read as gibberish; the separator row doubly so.
@@ -72,10 +84,21 @@ object SpeakableText {
             line = STRIKETHROUGH.replace(line) { it.groupValues[1] }
 
             if (line.isBlank()) continue
+            spoken.add(line)
+        }
+
+        val out = StringBuilder()
+        spoken.forEachIndexed { index, line ->
             out.append(line)
-            // Give each line a terminator so list items are not run together
-            // into one breathless sentence.
-            if (line.last() !in SENTENCE_ENDINGS) out.append('.')
+            val isLast = index == spoken.lastIndex
+            if (!isLast || terminateLastLine) {
+                val last = line.last()
+                // Punctuation that already carries a pause is left alone, so a
+                // line ending in a colon is not read as "here you go dot".
+                if (last !in SENTENCE_ENDINGS && last != ':' && last != ';' && last != ',') {
+                    out.append('.')
+                }
+            }
             out.append('\n')
         }
 

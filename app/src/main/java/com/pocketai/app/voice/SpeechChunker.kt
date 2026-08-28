@@ -18,9 +18,12 @@ class SpeechChunker(private val codeBlockNote: String = SpeakableText.DEFAULT_CO
 
     /** Sentences that became complete since the last call. */
     fun next(cumulativeAnswer: String): List<String> {
+        // The tail is still being written, so it must not be given a full stop
+        // that would make a fragment look like a finished sentence.
         val speech = SpeakableText.normalize(
             SpeakableText.stableRegion(cumulativeAnswer),
-            codeBlockNote
+            codeBlockNote,
+            terminateLastLine = false
         )
         if (speech.length <= spoken) return emptyList()
         val fresh = speech.substring(spoken)
