@@ -327,17 +327,15 @@ class InferenceEngine(private val context: Context) {
         val ctx = if (h != 0L) LlamaNative.nativeContextSize(h) else 4096
         val budget = (ctx - reserveTokens - 64).coerceAtLeast(256)
 
-        var window = turns
-        var prompt = render(h, systemPrompt, window)
-        while (window.size > 1) {
-            val tokens = if (h == 0L) prompt.length / 4
-            else runCatching { LlamaNative.nativeTokenCount(h, prompt) }.getOrDefault(prompt.length / 4)
-            if (tokens <= budget) break
-            // Drop the oldest exchange (a user turn plus the reply that followed it).
-            window = window.drop(if (window.size >= 2) 2 else 1)
-            prompt = render(h, systemPrompt, window)
+        // Trimming happens from the middle so the system prompt and opening
+        // exchange stay byte-identical, which keeps them in the KV cache.
+        val selection = ContextWindow.select(turns, budget) { window ->
+            val candidate = render(h, systemPrompt, window)
+            if (h == 0L) candidate.length / 4
+            else runCatching { LlamaNative.nativeTokenCount(h, candidate) }
+                .getOrDefault(candidate.length / 4)
         }
-        prompt
+        render(h, systemPrompt, selection.turns)
     }
 
     private fun render(h: Long, systemPrompt: String, turns: List<PromptTurn>): String {
