@@ -285,10 +285,9 @@ jobs:
           disable-animations: true
           # x86_64 only: the emulator cannot run the arm64 libraries, and
           # building both would double the native compile for no benefit.
-          script: |
-            ./gradlew --no-daemon connectedDebugAndroidTest \
-              -Ppocketai.testAbi=x86_64 \
-              -Pandroid.testInstrumentationRunnerArguments.notClass=com.pocketai.app.InferenceBenchmarkTest
+          # One command per line: this runner executes the script line by line,
+          # so a trailing backslash is passed straight to Gradle as a task name.
+          script: ./gradlew --no-daemon connectedDebugAndroidTest -Ppocketai.testAbi=x86_64 -Pandroid.testInstrumentationRunnerArguments.notClass=com.pocketai.app.InferenceBenchmarkTest
 
       - name: Upload instrumented test reports
         if: always()
@@ -371,11 +370,8 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           script: |
-            ./gradlew --no-daemon connectedDebugAndroidTest \
-              -Ppocketai.testAbi=x86_64 \
-              -Pandroid.testInstrumentationRunnerArguments.class=com.pocketai.app.InferenceBenchmarkTest
-            echo "--- benchmark output from logcat ---"
-            adb logcat -d -s PocketAIBench:I || true
+            ./gradlew --no-daemon connectedDebugAndroidTest -Ppocketai.testAbi=x86_64 -Pandroid.testInstrumentationRunnerArguments.class=com.pocketai.app.InferenceBenchmarkTest
+            adb logcat -d -s PocketAIBench:I
 
       - name: Upload benchmark reports
         if: always()
