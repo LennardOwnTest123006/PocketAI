@@ -107,6 +107,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     private var generationJob: Job? = null
     private var publisherJob: Job? = null
+    private var warmJob: Job? = null
 
     // Streaming buffers written from the inference thread, published on a timer
     // so the UI recomposes at a steady rate instead of once per token.
@@ -164,6 +165,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             stopGeneration()
             val id = chats.createConversation(modelId = settings.value.selectedModelId)
             engine.resetContext()
+            rewarmInBackground()
             conversationId.value = id
             _uiState.value = _uiState.value.copy(
                 conversationId = id,
@@ -182,6 +184,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             stopGeneration()
             engine.resetContext()
+            rewarmInBackground()
             conversationId.value = id
             val conversation = chats.conversation(id)
             _uiState.value = _uiState.value.copy(
@@ -193,6 +196,17 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 editingMessageId = null
             )
         }
+    }
+
+    /**
+     * Clearing the KV cache also discards the pre-evaluated system prompt, so
+     * switching chats would otherwise make the next message pay the full cold
+     * prefill again. Re-warming happens off the critical path so the new chat
+     * appears immediately.
+     */
+    private fun rewarmInBackground() {
+        warmJob?.cancel()
+        warmJob = viewModelScope.launch { session.warmUp(settings.value) }
     }
 
     fun renameConversation(id: Long, title: String) {
