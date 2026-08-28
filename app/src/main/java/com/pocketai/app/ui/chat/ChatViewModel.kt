@@ -276,7 +276,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 if (original != null) {
                     chats.truncateAfter(original)
                     chats.updateMessage(original.copy(content = text))
-                    runGeneration(regenerateFrom = null)
+                    runGeneration(continueFrom = null)
                     return@launch
                 }
             }
@@ -294,7 +294,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             chats.conversation(conversation)?.let {
                 _uiState.value = _uiState.value.copy(title = it.title)
             }
-            runGeneration(regenerateFrom = null)
+            runGeneration(continueFrom = null)
         }
     }
 
@@ -325,14 +325,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             chats.deleteMessage(message)
             chats.truncateAfter(message)
-            runGeneration(regenerateFrom = null)
+            runGeneration(continueFrom = null)
         }
     }
 
     /** Continues an answer that stopped early, appending to the same message. */
     fun continueGeneration(message: ChatMessage) {
         if (_uiState.value.streaming != null) return
-        viewModelScope.launch { runGeneration(regenerateFrom = message) }
+        viewModelScope.launch { runGeneration(continueFrom = message) }
     }
 
     fun summarize(message: ChatMessage, mode: SummaryMode) {
@@ -346,7 +346,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     content = SystemPrompt.summarize(mode, message.content)
                 )
             )
-            runGeneration(regenerateFrom = null)
+            runGeneration(continueFrom = null)
         }
     }
 
@@ -362,7 +362,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 )
             )
             chats.autoTitleIfNeeded(conversation, "Summary: ${text.take(40)}")
-            runGeneration(regenerateFrom = null)
+            runGeneration(continueFrom = null)
         }
     }
 
@@ -381,7 +381,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         if (_uiState.value.streaming != null) return
         viewModelScope.launch {
             chats.truncateAfter(message)
-            runGeneration(regenerateFrom = null)
+            runGeneration(continueFrom = null)
         }
     }
 
@@ -395,7 +395,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     // ------------------------------------------------------------ generation
 
-    private suspend fun runGeneration(regenerateFrom: ChatMessage?) {
+    private suspend fun runGeneration(continueFrom: ChatMessage?) {
         val current = settings.value
         val conversation = ensureConversation()
 
@@ -423,7 +423,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         // ---- optional web retrieval ---------------------------------------
         var sources: List<WebSource> = emptyList()
         var webBlock: String? = null
-        if (current.webSearchUsable && lastUser != null && regenerateFrom == null) {
+        if (current.webSearchUsable && lastUser != null && continueFrom == null) {
             setStatus(ChatStatus("Searching the web"))
             val query = WebSearchClient.toQuery(lastUser.content)
             when (val outcome = search.search(query, current.searchProvider, current.searchResultCount)) {
@@ -462,7 +462,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
         // When continuing, the partial answer is appended to the prompt rather
         // than sent as a finished assistant turn, so the model carries straight on.
-        val continuing = regenerateFrom != null
+        val continuing = continueFrom != null
         if (continuing && turns.lastOrNull()?.role == ChatRole.ASSISTANT) {
             turns.removeAt(turns.lastIndex)
         }
@@ -474,7 +474,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             reserveTokens = current.generation.maxOutputTokens
         )
         if (continuing) {
-            prompt += regenerateFrom?.content.orEmpty()
+            prompt += continueFrom?.content.orEmpty()
         }
 
         startStreaming(sources, webBlock != null)
@@ -496,7 +496,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 if (tail.answer.isNotEmpty()) answerBuffer.append(tail.answer)
                 streamDirty = true
             }
-            finishStreaming(conversation, outcome, sources, webBlock != null, regenerateFrom)
+            finishStreaming(conversation, outcome, sources, webBlock != null, continueFrom)
         }
     }
 

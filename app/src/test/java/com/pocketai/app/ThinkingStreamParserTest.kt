@@ -52,8 +52,22 @@ class ThinkingStreamParserTest {
     @Test
     fun `treats an unterminated block as thinking`() {
         val parser = ThinkingStreamParser()
-        parser.push("<think>still reasoning")
+        // Text inside an open block is emitted as it arrives so the Thinking
+        // panel fills live; finish() only flushes whatever is still held back.
+        val delta = parser.push("<think>still reasoning")
         assertTrue(parser.isInsideThinking)
-        assertEquals("still reasoning", parser.finish().thinking)
+        val tail = parser.finish()
+        assertEquals("still reasoning", delta.thinking + tail.thinking)
+        assertEquals("", delta.answer + tail.answer)
+    }
+
+    @Test
+    fun `holds back text that could still become a closing tag`() {
+        val parser = ThinkingStreamParser()
+        val first = parser.push("<think>done</thi")
+        assertEquals("done", first.thinking)
+        val second = parser.push("nk>answer")
+        assertEquals("answer", second.answer)
+        assertEquals("", second.thinking)
     }
 }

@@ -20,7 +20,7 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.FormatSize
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material.icons.outlined.Send
+import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Summarize
 import androidx.compose.material.icons.outlined.TextFields
@@ -90,7 +90,7 @@ fun MessageActionSheet(
             } else {
                 SheetAction(Icons.Outlined.Edit, "Edit") { onEdit(); onDismiss() }
                 SheetAction(Icons.Outlined.ContentCopy, "Copy") { onCopy(); onDismiss() }
-                SheetAction(Icons.Outlined.Send, "Resend") { onResend(); onDismiss() }
+                SheetAction(Icons.AutoMirrored.Outlined.Send, "Resend") { onResend(); onDismiss() }
                 SheetAction(Icons.Outlined.TextFields, "Select text") { onSelectText(); onDismiss() }
                 HorizontalDivider(Modifier.padding(vertical = 6.dp))
                 SheetAction(Icons.Outlined.Delete, "Delete", destructive = true) { onDelete(); onDismiss() }

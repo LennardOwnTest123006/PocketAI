@@ -114,12 +114,17 @@ int64_t now_ms() {
     return duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count();
 }
 
+// NOTE: special tokens must be rendered, not suppressed. Reasoning models such
+// as Qwen3 emit <think> / </think> as dedicated vocabulary entries; with
+// special=false they detokenise to nothing and the Thinking panel would never
+// receive its delimiters. End-of-generation tokens never reach here because the
+// decode loop breaks on them first.
 std::string token_to_text(const llama_vocab * vocab, llama_token tok) {
     char buf[256];
-    int n = llama_token_to_piece(vocab, tok, buf, sizeof(buf), 0, /*special=*/false);
+    int n = llama_token_to_piece(vocab, tok, buf, sizeof(buf), 0, /*special=*/true);
     if (n < 0) {
         std::vector<char> big(static_cast<size_t>(-n) + 1);
-        n = llama_token_to_piece(vocab, tok, big.data(), (int32_t) big.size(), 0, false);
+        n = llama_token_to_piece(vocab, tok, big.data(), (int32_t) big.size(), 0, true);
         if (n < 0) return {};
         return std::string(big.data(), static_cast<size_t>(n));
     }

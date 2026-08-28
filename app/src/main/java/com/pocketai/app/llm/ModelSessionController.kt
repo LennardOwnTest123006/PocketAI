@@ -36,14 +36,20 @@ class ModelSessionController(
         settings: AppSettings,
         onProgress: (Float) -> Unit = {}
     ): SessionResult = mutex.withLock {
+        // Fast path first: re-scanning the model directory and re-reading GGUF
+        // headers on every message would add latency for no benefit.
+        val loaded = engine.state.value.loadedModel
+        if (loaded != null && (settings.selectedModelId == null || loaded.id == settings.selectedModelId)) {
+            return SessionResult.Ready(loaded)
+        }
+
         val installed = modelRepository.refresh()
         if (installed.isEmpty()) return SessionResult.NoModelInstalled
 
         val wanted = installed.firstOrNull { it.id == settings.selectedModelId }
             ?: installed.first()
 
-        val current = engine.state.value.loadedModel
-        if (current != null && current.absolutePath == wanted.absolutePath) {
+        if (loaded != null && loaded.absolutePath == wanted.absolutePath) {
             return SessionResult.Ready(wanted)
         }
         if (settings.selectedModelId != wanted.id) {

@@ -44,7 +44,11 @@ if (POCKETAI_VULKAN)
     set(GGML_VULKAN ON CACHE BOOL "" FORCE)
 endif()
 
-add_subdirectory("${LLAMA_CPP_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/llama.cpp" EXCLUDE_FROM_ALL)
+# Deliberately NOT EXCLUDE_FROM_ALL: the Android Gradle plugin packages the
+# shared libraries produced by the CMake project, and the dlopen-able ggml
+# backend variants must be among them. Tests, examples, tools and the server
+# are already disabled above, so "all" is just the libraries.
+add_subdirectory("${LLAMA_CPP_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/llama.cpp")
 
 add_library(pocketai_llm SHARED pocketai_llm.cpp)
 

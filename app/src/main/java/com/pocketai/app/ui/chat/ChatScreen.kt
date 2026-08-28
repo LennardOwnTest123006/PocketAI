@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -295,8 +296,9 @@ fun ChatScreen(
                     LazyColumn(
                         state = listState,
                         modifier = Modifier
-                            .fillMaxSize()
+                            .fillMaxHeight()
                             .widthIn(max = 720.dp)
+                            .fillMaxWidth()
                             .align(Alignment.TopCenter),
                         contentPadding = PaddingValues(top = 10.dp, bottom = 18.dp),
                         verticalArrangement = Arrangement.spacedBy(LocalChatStyle.current.messageSpacing)
