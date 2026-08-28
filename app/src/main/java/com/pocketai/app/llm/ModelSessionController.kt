@@ -74,6 +74,24 @@ class ModelSessionController(
         }
     }
 
+    /**
+     * Pre-evaluates the (stable) system prompt into the KV cache.
+     *
+     * Costs nothing extra overall - those tokens have to be evaluated for the
+     * first message anyway - but moves the work off the critical path so the
+     * first reply's time-to-first-token is just the user's own tokens.
+     * Cheap and idempotent once the prefix is already cached.
+     */
+    suspend fun warmUp(settings: AppSettings): WarmResult {
+        val model = engine.state.value.loadedModel ?: return WarmResult(0, 0, 0)
+        val prompt = SystemPrompt.build(
+            settings = settings,
+            modelLabel = model.displayName,
+            mode = settings.responseMode
+        )
+        return engine.warmPrefix(prompt)
+    }
+
     suspend fun unload() = mutex.withLock { engine.unload() }
 
     /** Forces a reload so changed runtime settings (threads, context) take effect. */

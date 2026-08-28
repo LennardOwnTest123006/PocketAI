@@ -75,7 +75,7 @@ data class DeviceCapabilities(
                 totalRamBytes = mi.totalMem,
                 availableRamBytes = mi.availMem,
                 cpuCores = cores,
-                performanceCores = estimatePerformanceCores(cores),
+                performanceCores = readPerformanceCores(cores),
                 supportedAbis = Build.SUPPORTED_ABIS.toList(),
                 is64Bit = Build.SUPPORTED_64_BIT_ABIS.isNotEmpty(),
                 availableStorageBytes = available,
@@ -103,11 +103,36 @@ data class DeviceCapabilities(
         }
 
         /**
-         * Android does not expose the big/little split, so we approximate it.
-         * Typical modern ARM layouts dedicate roughly half the cores to
-         * performance; using all of them makes generation slower, not faster,
-         * because the little cores stall the batch.
+         * Counts the fast cores by reading the kernel's per-CPU maximum
+         * frequencies rather than guessing from the core count.
+         *
+         * This matters for inference: llama.cpp splits a matmul evenly across
+         * its threads, so scheduling work onto an efficiency core makes the
+         * whole batch wait for the slowest participant. On a Snapdragon 8 Gen 3
+         * (1 prime + 5 performance + 2 efficiency) this returns 6, not the 5
+         * the old cores/2+1 guess produced.
          */
+        fun readPerformanceCores(cores: Int): Int {
+            val freqs = ArrayList<Long>(cores)
+            for (i in 0 until cores) {
+                val value = runCatching {
+                    File("/sys/devices/system/cpu/cpu$i/cpufreq/cpuinfo_max_freq")
+                        .readText().trim().toLong()
+                }.getOrNull()
+                if (value != null && value > 0) freqs.add(value)
+            }
+            if (freqs.isEmpty()) return estimatePerformanceCores(cores)
+
+            val fastest = freqs.max()
+            // Anything within 15% of the fastest core counts as a "big" core;
+            // that keeps prime + performance clusters together and drops the
+            // efficiency cluster, which sits far lower.
+            val threshold = (fastest * 0.85).toLong()
+            val fast = freqs.count { it >= threshold }
+            return fast.coerceIn(1, cores)
+        }
+
+        /** Fallback when cpufreq is not readable (some emulators, locked kernels). */
         private fun estimatePerformanceCores(cores: Int): Int = when {
             cores >= 8 -> cores / 2 + 1
             cores >= 6 -> 4

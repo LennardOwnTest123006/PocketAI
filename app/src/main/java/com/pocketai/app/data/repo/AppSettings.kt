@@ -112,7 +112,11 @@ data class GenerationSettings(
     val minP: Float = 0.05f,
     val repeatPenalty: Float = 1.1f,
     val repeatLastN: Int = 256,
-    val maxOutputTokens: Int = 1024,
+    /**
+     * Hard user ceiling. The per-request budget is the smaller of this and the
+     * active [com.pocketai.app.llm.ResponseMode] budget.
+     */
+    val maxOutputTokens: Int = 768,
     val contextLength: Int = 4096,
     val seed: Int = -1
 )
@@ -131,6 +135,7 @@ data class AppSettings(
     val flashAttention: Boolean = true,
 
     val showThinking: Boolean = true,
+    val responseMode: com.pocketai.app.llm.ResponseMode = com.pocketai.app.llm.ResponseMode.BALANCED,
     val emojiStyle: EmojiStyle = EmojiStyle.NATURAL,
 
     val themeId: String = "pocket_dark",

@@ -73,6 +73,12 @@ object LlamaNative {
         addAssistant: Boolean
     ): String?
 
+    /**
+     * Evaluates a prefix into the KV cache without sampling, so a later
+     * generation only pays for the tokens appended after it.
+     */
+    external fun nativeWarmPrefix(handle: Long, prefix: String): String
+
     external fun nativeTokenCount(handle: Long, text: String): Int
 
     external fun nativeContextSize(handle: Long): Int

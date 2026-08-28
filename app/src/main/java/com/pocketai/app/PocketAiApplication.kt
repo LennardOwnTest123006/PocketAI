@@ -1,6 +1,7 @@
 package com.pocketai.app
 
 import android.app.Application
+import android.content.ComponentCallbacks2
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -20,19 +21,29 @@ class PocketAiApplication : Application() {
 
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
-        // Model weights are by far the largest allocation this process holds.
-        // Under real pressure, releasing them keeps the app alive instead of
-        // being killed outright; the next message reloads the model
-        // automatically through ModelSessionController.ensureLoaded().
-        if (level >= TRIM_MEMORY_CRITICAL) {
-            container.inferenceEngine.stop()
-            appScope.launch { container.modelSession.unload() }
+
+        // Only release the model once the process is genuinely in the
+        // background. TRIM_MEMORY_RUNNING_CRITICAL fires while the app is still
+        // in the foreground - and a phone running a multi-gigabyte model is
+        // exactly the situation where it fires. Unloading there threw away a
+        // model the user was actively chatting with and made the *next* message
+        // pay a multi-second reload, which is far worse than the memory it saved.
+        if (level >= ComponentCallbacks2.TRIM_MEMORY_BACKGROUND) {
+            releaseModel()
         }
     }
 
-    private companion object {
-        // ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL, inlined because the
-        // constant itself is deprecated while the callback still delivers it.
-        const val TRIM_MEMORY_CRITICAL = 15
+    @Deprecated("Kept for older platform versions that still call it.")
+    override fun onLowMemory() {
+        super.onLowMemory()
+        // Genuine system-wide pressure: give the weights back rather than be killed.
+        releaseModel()
+    }
+
+    private fun releaseModel() {
+        container.inferenceEngine.stop()
+        // Reloaded automatically on the next message by
+        // ModelSessionController.ensureLoaded().
+        appScope.launch { container.modelSession.unload() }
     }
 }

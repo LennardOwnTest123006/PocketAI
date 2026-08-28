@@ -2,10 +2,12 @@ package com.pocketai.app
 
 import com.pocketai.app.data.repo.AppSettings
 import com.pocketai.app.data.repo.EmojiStyle
+import com.pocketai.app.llm.ResponseMode
 import com.pocketai.app.llm.SummaryMode
 import com.pocketai.app.llm.SystemPrompt
 import com.pocketai.app.data.repo.WebSource
 import com.pocketai.app.web.WebSearchClient
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -46,38 +48,50 @@ class WebSearchHeuristicsTest {
 
 class SystemPromptTest {
 
+    private fun prompt(
+        settings: AppSettings = AppSettings(),
+        model: String? = "Qwen3 1.7B",
+        mode: ResponseMode = ResponseMode.BALANCED
+    ) = SystemPrompt.build(settings, model, mode)
+
     @Test
-    fun `tells the model it has no internet when search is off`() {
-        val prompt = SystemPrompt.build(
-            settings = AppSettings(),
-            modelLabel = "Qwen3 1.7B",
-            webContextAvailable = false
-        )
-        assertTrue(prompt.contains("no internet access"))
-        assertTrue(prompt.contains("PocketAI"))
-        assertTrue(prompt.contains("Qwen3 1.7B"))
+    fun `always states that it has no live internet access`() {
+        val text = prompt()
+        assertTrue(text.contains("PocketAI"))
+        assertTrue(text.contains("no live internet access"))
+        assertTrue(text.contains("Qwen3 1.7B"))
     }
 
     @Test
-    fun `switches to source attribution when web results are supplied`() {
-        val prompt = SystemPrompt.build(
-            settings = AppSettings(),
-            modelLabel = null,
-            webContextAvailable = true
-        )
-        assertTrue(prompt.contains("SEARCH RESULTS"))
-        assertFalse(prompt.contains("no internet access"))
+    fun `explains how to treat supplied search results`() {
+        // The convention is stated once, up front, instead of being swapped in
+        // and out per message - see the stability test below for why.
+        assertTrue(prompt().contains("SEARCH RESULTS"))
+    }
+
+    @Test
+    fun `is byte-identical across turns so the kv cache can serve it`() {
+        // The system prompt is the first ~300 tokens of every request. If it
+        // varied per message the cached prefix would miss every single turn and
+        // the model would re-evaluate it from scratch, which is precisely the
+        // latency this design exists to avoid.
+        val settings = AppSettings()
+        val first = SystemPrompt.build(settings, "Qwen3 1.7B", ResponseMode.BALANCED)
+        val second = SystemPrompt.build(settings, "Qwen3 1.7B", ResponseMode.BALANCED)
+        assertEquals(first, second)
+    }
+
+    @Test
+    fun `carries the response mode style hint`() {
+        assertTrue(prompt(mode = ResponseMode.FAST).contains(ResponseMode.FAST.styleHint))
+        assertTrue(prompt(mode = ResponseMode.THINKING).contains(ResponseMode.THINKING.styleHint))
     }
 
     @Test
     fun `carries the emoji preference through to the model`() {
-        val none = SystemPrompt.build(
-            AppSettings(emojiStyle = EmojiStyle.NONE), null, false
-        )
+        val none = prompt(AppSettings(emojiStyle = EmojiStyle.NONE))
         assertTrue(none.contains("Do not use any emoji"))
-        val expressive = SystemPrompt.build(
-            AppSettings(emojiStyle = EmojiStyle.EXPRESSIVE), null, false
-        )
+        val expressive = prompt(AppSettings(emojiStyle = EmojiStyle.EXPRESSIVE))
         assertTrue(expressive.contains("freely"))
     }
 

@@ -150,6 +150,11 @@ class ModelsViewModel(application: Application) : AndroidViewModel(application) 
             val result = session.load(model, settings.value) { progress ->
                 _uiState.value = _uiState.value.copy(loadProgress = progress)
             }
+            if (result is SessionResult.Ready) {
+                // Evaluate the system prompt now so the first message is fast.
+                _uiState.value = _uiState.value.copy(busyMessage = "Warming up")
+                session.warmUp(settings.value)
+            }
             _uiState.value = when (result) {
                 is SessionResult.Ready -> _uiState.value.copy(
                     busyMessage = null,

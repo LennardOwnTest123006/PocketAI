@@ -138,7 +138,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         when (val result = session.ensureLoaded(current) { p ->
             setStatus(ChatStatus("Loading model", p))
         }) {
-            is SessionResult.Ready -> setStatus(null)
+            is SessionResult.Ready -> {
+                setStatus(ChatStatus("Warming up"))
+                session.warmUp(current)
+                setStatus(null)
+            }
             SessionResult.NoModelInstalled -> setStatus(null)
             is SessionResult.Failed -> {
                 setStatus(null)
@@ -446,19 +450,26 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             setStatus(null)
         }
 
+        val loadedModel = engine.state.value.loadedModel
+        val mode = current.responseMode
         val systemPrompt = SystemPrompt.build(
             settings = current,
-            modelLabel = engine.state.value.loadedModel?.displayName,
-            webContextAvailable = webBlock != null
+            modelLabel = loadedModel?.displayName,
+            mode = mode
         )
 
         val turns = ArrayList<PromptTurn>()
         history.filter { it.role != ChatRole.SYSTEM && !it.isError }.forEach { message ->
             val isLastUser = message.id == lastUser?.id
-            val content = if (isLastUser && webBlock != null) {
-                webBlock + "\n\n" + message.content
-            } else {
-                message.content
+            var content = message.content
+            if (isLastUser) {
+                if (webBlock != null) content = webBlock + "\n\n" + content
+                // Reasoning models accept a per-turn switch; Fast mode uses it so
+                // a one-line question does not pay for a thinking pass.
+                content = mode.applyReasoningSwitch(
+                    content,
+                    modelSupportsThinking = loadedModel?.supportsThinking == true
+                )
             }
             turns.add(PromptTurn(message.role, content))
         }
@@ -470,10 +481,19 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
         if (turns.isEmpty()) return
 
+        // The budget is a ceiling, not a truncation point: the model still stops
+        // at its own end-of-turn token. It exists so a short question does not
+        // get charged for the maximum-length answer the model would otherwise
+        // drift into, which is what dominates total response time.
+        val tokenBudget = mode.budgetFor(
+            userMessage = lastUser?.content.orEmpty(),
+            userCeiling = current.generation.maxOutputTokens
+        )
+
         var prompt = engine.buildPrompt(
             systemPrompt = systemPrompt,
             turns = turns,
-            reserveTokens = current.generation.maxOutputTokens
+            reserveTokens = tokenBudget
         )
         if (continuing) {
             prompt += continueFrom?.content.orEmpty()
@@ -483,7 +503,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val parser = ThinkingStreamParser()
 
         generationJob = viewModelScope.launch {
-            val outcome = engine.generate(prompt, current, container.deviceCapabilities()) { piece ->
+            val outcome = engine.generate(prompt, current, container.deviceCapabilities(), tokenBudget) { piece ->
                 val delta = parser.push(piece)
                 synchronized(streamLock) {
                     if (delta.thinking.isNotEmpty()) thinkingBuffer.append(delta.thinking)

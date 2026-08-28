@@ -170,6 +170,68 @@ bool load_progress_cb(float progress, void * user_data) {
     return true;
 }
 
+/**
+ * Reuses the longest cached prefix and evaluates only the remaining tokens.
+ *
+ * This is the single most important latency path in the app: without it every
+ * turn re-evaluates the whole conversation, and with it a follow-up message
+ * only pays for the tokens the user just added.
+ *
+ * Returns the number of tokens that were reused, or -1 on a decode failure.
+ */
+int ingest_tokens(Session * s, const std::vector<llama_token> & tokens, bool want_logits) {
+    if (tokens.empty()) return -1;
+
+    size_t common = 0;
+    // Always re-evaluate at least one token so the caller gets fresh logits.
+    const size_t max_common = want_logits ? tokens.size() - 1 : tokens.size();
+    while (common < s->cached.size() && common < max_common && s->cached[common] == tokens[common]) {
+        common++;
+    }
+
+    llama_memory_t mem = llama_get_memory(s->ctx);
+    // Recurrent and sliding-window models can refuse a partial trim; falling
+    // back to a clean cache is slower but always correct.
+    if (!llama_memory_seq_rm(mem, 0, (llama_pos) common, -1)) {
+        llama_memory_clear(mem, true);
+        common = 0;
+    }
+    s->cached.resize(common);
+
+    if (common >= tokens.size()) {
+        return (int) common;   // nothing new to evaluate
+    }
+
+    const int n_batch = (int) llama_n_batch(s->ctx);
+    llama_batch batch = llama_batch_init(n_batch, 0, 1);
+    struct BatchGuard {
+        llama_batch b;
+        ~BatchGuard() { llama_batch_free(b); }
+    } guard{batch};
+
+    for (size_t i = common; i < tokens.size(); ) {
+        const size_t chunk = std::min<size_t>(static_cast<size_t>(n_batch), tokens.size() - i);
+        batch.n_tokens = (int32_t) chunk;
+        for (size_t j = 0; j < chunk; j++) {
+            batch.token[j]     = tokens[i + j];
+            batch.pos[j]       = (llama_pos) (i + j);
+            batch.n_seq_id[j]  = 1;
+            batch.seq_id[j][0] = 0;
+            batch.logits[j]    = (want_logits && i + j == tokens.size() - 1) ? 1 : 0;
+        }
+        if (llama_decode(s->ctx, batch) != 0) {
+            s->cached.clear();
+            llama_memory_clear(mem, true);
+            return -1;
+        }
+        i += chunk;
+        if (s->stop.load(std::memory_order_relaxed)) break;
+    }
+
+    s->cached = tokens;
+    return (int) common;
+}
+
 } // namespace
 
 extern "C" {
@@ -280,8 +342,10 @@ Java_com_pocketai_app_llm_LlamaNative_nativeLoadModel(
 
     llama_context_params cparams = llama_context_default_params();
     cparams.n_ctx           = static_cast<uint32_t>(nCtx > 0 ? nCtx : 4096);
-    cparams.n_batch         = 512;
-    cparams.n_ubatch        = 256;
+    // n_ubatch is the physical batch actually handed to the kernels; the old
+    // 256 halved prefill throughput for no memory benefit at these sizes.
+    cparams.n_batch         = 1024;
+    cparams.n_ubatch        = 512;
     cparams.n_threads       = s->n_threads;
     cparams.n_threads_batch = s->n_threads;
     cparams.flash_attn      = flashAttn == JNI_TRUE;
@@ -429,6 +493,49 @@ Java_com_pocketai_app_llm_LlamaNative_nativeResetContext(JNIEnv *, jobject, jlon
     s->cached.clear();
 }
 
+/**
+ * Evaluates a prefix (the system prompt, typically) into the KV cache without
+ * sampling anything, so the first real message only has to prefill the user's
+ * own tokens. This is what turns a ~400-token cold prefill into a ~20-token one.
+ */
+JNIEXPORT jstring JNICALL
+Java_com_pocketai_app_llm_LlamaNative_nativeWarmPrefix(
+        JNIEnv * env, jobject, jlong handle, jstring prefix) {
+
+    auto * s = reinterpret_cast<Session *>(handle);
+    if (s == nullptr || s->ctx == nullptr) {
+        return to_jstr(env, "{\"error\":\"no_model\"}");
+    }
+    if (s->busy.load()) {
+        // Never fight an in-flight generation for the session lock.
+        return to_jstr(env, "{\"error\":\"busy\"}");
+    }
+
+    const std::string text = jstr(env, prefix);
+    if (text.empty()) return to_jstr(env, "{\"error\":\"empty_prompt\"}");
+
+    std::lock_guard<std::mutex> lock(s->mutex);
+    s->stop.store(false);
+
+    std::vector<llama_token> tokens = tokenize(s->vocab, text, true, true);
+    if (tokens.empty() || (int) tokens.size() >= s->n_ctx - 8) {
+        return to_jstr(env, "{\"error\":\"empty_prompt\"}");
+    }
+
+    const int64_t t0 = now_ms();
+    const int reused = ingest_tokens(s, tokens, /*want_logits=*/false);
+    const int64_t t1 = now_ms();
+
+    if (reused < 0) return to_jstr(env, "{\"error\":\"decode_failed\"}");
+
+    std::string json = "{";
+    json += "\"tokens\":" + std::to_string((long long) tokens.size()) + ",";
+    json += "\"cachedTokens\":" + std::to_string((long long) reused) + ",";
+    json += "\"ms\":" + std::to_string((long long) (t1 - t0));
+    json += "}";
+    return to_jstr(env, json);
+}
+
 JNIEXPORT jstring JNICALL
 Java_com_pocketai_app_llm_LlamaNative_nativeGenerate(
         JNIEnv * env, jobject, jlong handle, jstring prompt,
@@ -478,58 +585,26 @@ Java_com_pocketai_app_llm_LlamaNative_nativeGenerate(
 
     const int64_t t_start = now_ms();
 
-    // ---- KV-cache prefix reuse -------------------------------------------
-    size_t common = 0;
-    const size_t max_common = tokens.size() - 1;   // always re-evaluate >=1 token for logits
-    while (common < s->cached.size() && common < max_common && s->cached[common] == tokens[common]) {
-        common++;
-    }
-    llama_memory_t mem = llama_get_memory(s->ctx);
-    // Some architectures (recurrent models, sliding-window attention) cannot
-    // drop a partial sequence. If the trim is refused, start from a clean cache
-    // rather than decoding against stale state.
-    if (!llama_memory_seq_rm(mem, 0, (llama_pos) common, -1)) {
-        llama_memory_clear(mem, true);
-        common = 0;
-    }
-    s->cached.resize(common);
-
-    // ---- prompt ingest ----------------------------------------------------
-    const int n_batch = (int) llama_n_batch(s->ctx);
-    llama_batch batch = llama_batch_init(n_batch, 0, 1);
-    struct BatchGuard {
-        llama_batch b;
-        ~BatchGuard() { llama_batch_free(b); }
-    } batch_guard{batch};
-
-    bool failed = false;
-    for (size_t i = common; i < tokens.size() && !failed; ) {
-        const size_t chunk = std::min<size_t>(static_cast<size_t>(n_batch), tokens.size() - i);
-        batch.n_tokens = (int32_t) chunk;
-        for (size_t j = 0; j < chunk; j++) {
-            batch.token[j]     = tokens[i + j];
-            batch.pos[j]       = (llama_pos) (i + j);
-            batch.n_seq_id[j]  = 1;
-            batch.seq_id[j][0] = 0;
-            batch.logits[j]    = (i + j == tokens.size() - 1) ? 1 : 0;
-        }
-        if (llama_decode(s->ctx, batch) != 0) failed = true;
-        i += chunk;
-        if (s->stop.load(std::memory_order_relaxed)) break;
-    }
-
-    if (failed) {
-        s->cached.clear();
-        llama_memory_clear(mem, true);
+    // ---- prompt ingest (reuses the cached prefix) --------------------------
+    const int reused = ingest_tokens(s, tokens, /*want_logits=*/true);
+    if (reused < 0) {
         return to_jstr(env, "{\"error\":\"decode_failed\"}");
     }
-    s->cached = tokens;
+    const size_t common = static_cast<size_t>(reused);
+    const int64_t t_prompt_end = now_ms();
 
     if (s->stop.load(std::memory_order_relaxed)) {
         return to_jstr(env, "{\"stopReason\":\"cancelled\",\"promptTokens\":"
                             + std::to_string((long long) tokens.size())
                             + ",\"generatedTokens\":0}");
     }
+
+    // A single-token batch drives the decode loop below.
+    llama_batch batch = llama_batch_init(1, 0, 1);
+    struct DecodeBatchGuard {
+        llama_batch b;
+        ~DecodeBatchGuard() { llama_batch_free(b); }
+    } decode_batch_guard{batch};
 
     // ---- sampler chain ----------------------------------------------------
     llama_sampler_chain_params sp = llama_sampler_chain_default_params();
@@ -620,21 +695,33 @@ Java_com_pocketai_app_llm_LlamaNative_nativeGenerate(
     }
 
     const int64_t t_end = now_ms();
-    const int64_t ttft  = (t_first > 0) ? (t_first - t_start) : 0;
-    const int64_t gen_ms = (t_first > 0) ? (t_end - t_first) : 0;
-    const double tps = (gen_ms > 0) ? (generated * 1000.0 / (double) gen_ms) : 0.0;
+    const int64_t ttft   = (t_first > 0) ? (t_first - t_start) : 0;
+    const int64_t prompt_ms = t_prompt_end - t_start;
+    const int64_t decode_ms = t_end - t_prompt_end;
 
-    char tps_buf[32];
-    snprintf(tps_buf, sizeof(tps_buf), "%.3f", tps);
+    // Prefill and decode are reported separately: they have completely
+    // different cost models, and averaging them hides which one is slow.
+    const size_t evaluated = tokens.size() - common;
+    const double decode_tps = (decode_ms > 0) ? (generated * 1000.0 / (double) decode_ms) : 0.0;
+    const double prompt_tps = (prompt_ms > 0) ? (evaluated * 1000.0 / (double) prompt_ms) : 0.0;
+
+    char decode_buf[32];
+    char prompt_buf[32];
+    snprintf(decode_buf, sizeof(decode_buf), "%.3f", decode_tps);
+    snprintf(prompt_buf, sizeof(prompt_buf), "%.3f", prompt_tps);
 
     std::string json = "{";
     json += "\"stopReason\":\"" + std::string(stop_reason) + "\",";
     json += "\"promptTokens\":" + std::to_string((long long) tokens.size()) + ",";
     json += "\"cachedTokens\":" + std::to_string((long long) common) + ",";
+    json += "\"evaluatedTokens\":" + std::to_string((long long) evaluated) + ",";
     json += "\"generatedTokens\":" + std::to_string(generated) + ",";
     json += "\"firstTokenMs\":" + std::to_string((long long) ttft) + ",";
+    json += "\"promptMs\":" + std::to_string((long long) prompt_ms) + ",";
+    json += "\"decodeMs\":" + std::to_string((long long) decode_ms) + ",";
     json += "\"totalMs\":" + std::to_string((long long) (t_end - t_start)) + ",";
-    json += "\"tokensPerSecond\":" + std::string(tps_buf);
+    json += "\"promptTokensPerSecond\":" + std::string(prompt_buf) + ",";
+    json += "\"tokensPerSecond\":" + std::string(decode_buf);
     json += "}";
     return to_jstr(env, json);
 }

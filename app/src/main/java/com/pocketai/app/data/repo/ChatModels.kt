@@ -27,14 +27,24 @@ data class WebSource(
 /** Timings reported by the native engine for one generation. */
 data class GenerationStats(
     val promptTokens: Int = 0,
+    /** Tokens served straight from the KV cache, i.e. not re-evaluated. */
     val cachedTokens: Int = 0,
+    /** Tokens the prefill actually had to run through the model. */
+    val evaluatedTokens: Int = 0,
     val generatedTokens: Int = 0,
     val firstTokenMs: Long = 0,
+    val promptMs: Long = 0,
+    val decodeMs: Long = 0,
     val totalMs: Long = 0,
+    val promptTokensPerSecond: Double = 0.0,
     val tokensPerSecond: Double = 0.0,
     val stopReason: String = ""
 ) {
     val hasData: Boolean get() = generatedTokens > 0 || totalMs > 0
+
+    /** Share of the prompt that the cache covered, for the benchmark screen. */
+    val cacheHitRatio: Double
+        get() = if (promptTokens > 0) cachedTokens.toDouble() / promptTokens else 0.0
 }
 
 data class ChatMessage(

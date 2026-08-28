@@ -3,6 +3,8 @@ package com.pocketai.app.llm
 import android.content.Context
 import com.pocketai.app.core.DeviceCapabilities
 import com.pocketai.app.core.PerformanceMode
+import com.pocketai.app.core.ThermalLevel
+import com.pocketai.app.core.ThermalMonitor
 import com.pocketai.app.data.model.InstalledModel
 import com.pocketai.app.data.repo.AppSettings
 import com.pocketai.app.data.repo.ChatRole
@@ -61,6 +63,10 @@ data class EngineState(
         }
 }
 
+data class WarmResult(val tokens: Int, val cachedTokens: Int, val millis: Long) {
+    val evaluated: Int get() = (tokens - cachedTokens).coerceAtLeast(0)
+}
+
 sealed interface LoadResult {
     data class Success(val info: NativeModelInfo) : LoadResult
     data class Failure(val message: String) : LoadResult
@@ -88,6 +94,7 @@ class InferenceEngine(private val context: Context) {
     }
     private val dispatcher: CoroutineDispatcher = executor.asCoroutineDispatcher()
     private val loadMutex = Mutex()
+    private val thermal = ThermalMonitor(context)
 
     @Volatile
     private var handle: Long = 0L
@@ -251,6 +258,28 @@ class InferenceEngine(private val context: Context) {
         if (h != 0L) runCatching { LlamaNative.nativeRequestStop(h) }
     }
 
+    /**
+     * Evaluates [prefix] into the KV cache ahead of time.
+     *
+     * The system prompt is ~400 tokens and is identical for every message, so
+     * paying for it once in the background turns the first reply's prefill into
+     * just the user's own tokens. Safe to call repeatedly - an already-cached
+     * prefix costs nothing.
+     */
+    suspend fun warmPrefix(prefix: String): WarmResult = withContext(dispatcher) {
+        val h = handle
+        if (h == 0L || prefix.isBlank()) return@withContext WarmResult(0, 0, 0)
+        runCatching {
+            val o = JSONObject(LlamaNative.nativeWarmPrefix(h, prefix))
+            if (o.has("error")) WarmResult(0, 0, 0)
+            else WarmResult(
+                tokens = o.optInt("tokens"),
+                cachedTokens = o.optInt("cachedTokens"),
+                millis = o.optLong("ms")
+            )
+        }.getOrDefault(WarmResult(0, 0, 0))
+    }
+
     /** Drops the KV cache, e.g. when starting a brand new conversation. */
     suspend fun resetContext() = withContext(dispatcher) {
         val h = handle
@@ -263,9 +292,24 @@ class InferenceEngine(private val context: Context) {
         if (h == 0L) -1 else runCatching { LlamaNative.nativeTokenCount(h, text) }.getOrDefault(-1)
     }
 
-    private fun resolveThreads(settings: AppSettings, caps: DeviceCapabilities): Int =
-        if (settings.threadOverride > 0) settings.threadOverride.coerceAtMost(caps.cpuCores)
-        else settings.performanceMode.threadsFor(caps)
+    /**
+     * Threads for this request, after thermal headroom.
+     *
+     * A throttled SoC delivers fewer tokens per second at full width than a
+     * cool one does at reduced width, so backing off is a speed decision as
+     * much as a temperature one.
+     */
+    private fun resolveThreads(settings: AppSettings, caps: DeviceCapabilities): Int {
+        val configured = if (settings.threadOverride > 0) {
+            settings.threadOverride.coerceAtMost(caps.cpuCores)
+        } else {
+            settings.performanceMode.threadsFor(caps)
+        }
+        return thermal.adjustThreads(configured)
+    }
+
+    /** Current thermal state, surfaced in the benchmark screen. */
+    fun thermalLevel(): ThermalLevel = thermal.current()
 
     /**
      * Renders the conversation with the model's own chat template, trimming the
@@ -330,6 +374,8 @@ class InferenceEngine(private val context: Context) {
         prompt: String,
         settings: AppSettings,
         caps: DeviceCapabilities,
+        /** Ceiling for this specific request; see ResponseMode.budgetFor. */
+        maxTokens: Int = settings.generation.maxOutputTokens,
         onToken: (String) -> Unit
     ): GenerationOutcome {
         val h = handle
@@ -342,7 +388,7 @@ class InferenceEngine(private val context: Context) {
                 LlamaNative.nativeGenerate(
                     handle = h,
                     prompt = prompt,
-                    maxTokens = settings.generation.maxOutputTokens,
+                    maxTokens = maxTokens,
                     temperature = settings.generation.temperature,
                     topP = settings.generation.topP,
                     topK = settings.generation.topK,
@@ -388,9 +434,13 @@ class InferenceEngine(private val context: Context) {
             GenerationStats(
                 promptTokens = o.optInt("promptTokens"),
                 cachedTokens = o.optInt("cachedTokens"),
+                evaluatedTokens = o.optInt("evaluatedTokens"),
                 generatedTokens = o.optInt("generatedTokens"),
                 firstTokenMs = o.optLong("firstTokenMs"),
+                promptMs = o.optLong("promptMs"),
+                decodeMs = o.optLong("decodeMs"),
                 totalMs = o.optLong("totalMs"),
+                promptTokensPerSecond = o.optDouble("promptTokensPerSecond", 0.0),
                 tokensPerSecond = o.optDouble("tokensPerSecond", 0.0),
                 stopReason = o.optString("stopReason")
             )

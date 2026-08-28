@@ -2,6 +2,7 @@ package com.pocketai.app
 
 import android.content.Context
 import com.pocketai.app.core.DeviceCapabilities
+import com.pocketai.app.core.ThermalMonitor
 import com.pocketai.app.data.db.PocketAiDatabase
 import com.pocketai.app.data.model.ModelDownloadManager
 import com.pocketai.app.data.model.ModelRepository
@@ -45,6 +46,8 @@ class AppContainer(private val context: Context) {
             capabilities = { deviceCapabilities() }
         )
     }
+
+    val thermalMonitor: ThermalMonitor by lazy { ThermalMonitor(context) }
 
     val webSearchClient: WebSearchClient by lazy { WebSearchClient(context) }
 

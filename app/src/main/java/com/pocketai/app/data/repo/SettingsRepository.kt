@@ -47,6 +47,7 @@ class SettingsRepository(private val context: Context) {
         val flashAttention = booleanPreferencesKey("perf_flash_attn")
 
         val showThinking = booleanPreferencesKey("show_thinking")
+        val responseMode = stringPreferencesKey("response_mode")
         val emojiStyle = stringPreferencesKey("emoji_style")
 
         val themeId = stringPreferencesKey("theme_id")
@@ -112,6 +113,7 @@ class SettingsRepository(private val context: Context) {
                 useMlock = p[Keys.useMlock] ?: false,
                 flashAttention = p[Keys.flashAttention] ?: true,
                 showThinking = p[Keys.showThinking] ?: true,
+                responseMode = com.pocketai.app.llm.ResponseMode.fromId(p[Keys.responseMode]),
                 emojiStyle = EmojiStyle.fromId(p[Keys.emojiStyle]),
                 themeId = p[Keys.themeId] ?: defaults.themeId,
                 darkMode = DarkModePreference.fromId(p[Keys.darkMode]),
@@ -174,6 +176,8 @@ class SettingsRepository(private val context: Context) {
     suspend fun setFlashAttention(v: Boolean) = edit { it[Keys.flashAttention] = v }
 
     suspend fun setShowThinking(v: Boolean) = edit { it[Keys.showThinking] = v }
+    suspend fun setResponseMode(v: com.pocketai.app.llm.ResponseMode) =
+        edit { it[Keys.responseMode] = v.id }
     suspend fun setEmojiStyle(v: EmojiStyle) = edit { it[Keys.emojiStyle] = v.id }
 
     suspend fun setThemeId(v: String) = edit { it[Keys.themeId] = v }
