@@ -165,9 +165,7 @@ class SpeechChunkerTest {
     @Test
     fun `list items are still separated once they are complete`() {
         val chunker = SpeechChunker()
-        val spoken = chunker.next("- first item
-- second item
-- third")
+        val spoken = chunker.next("- first item\n- second item\n- third")
         assertEquals(listOf("first item.", "second item."), spoken)
     }
 
