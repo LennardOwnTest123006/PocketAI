@@ -158,40 +158,28 @@ data class AppSettings(
     val localOnlyMode: Boolean = false,
     val showPerformanceStats: Boolean = true,
 
-    val speak: SpeakSettings = SpeakSettings()
+    val voice: VoiceSettings = VoiceSettings()
 ) {
     /** Web access is only ever attempted when both switches allow it. */
     val webSearchUsable: Boolean get() = webSearchEnabled && !localOnlyMode
 }
 
-/** Everything Speak Mode remembers between conversations. */
-data class SpeakSettings(
+/** How PocketAI sounds when it reads an answer out loud. */
+data class VoiceSettings(
     /**
-     * Let the language of the reply follow the language that was spoken. Off
-     * means PocketAI always answers in [languageTag].
+     * Work out the language from the answer itself. Off means always read in
+     * [languageTag], which is useful if detection ever picks wrong.
      */
-    val autoDetectLanguage: Boolean = false,
-    /** Empty means "follow the phone's language". */
+    val detectLanguage: Boolean = true,
+    /** Used when detection is off. Empty means English. */
     val languageTag: String = "",
     /**
      * PocketAI's voice signature. Slightly below neutral pitch and a touch under
      * conversational pace reads as calm and stays intelligible in every
      * language, including ones whose voices run fast by default.
      */
-    val voicePitch: Float = 0.96f,
-    val voiceRate: Float = 0.98f,
-    /**
-     * Refuse recognisers that would upload audio. Off by default so Speak Mode
-     * works out of the box: it always prefers the on-device recogniser, and only
-     * falls back to the online one (announcing it) when the phone has no offline
-     * pack for the language. Turning this on makes that fallback a hard stop for
-     * users who want nothing sent off the device.
-     */
-    val onDeviceRecognitionOnly: Boolean = false,
-    /** Keep the turn-taking loop going instead of stopping after one answer. */
-    val continuousConversation: Boolean = true,
-    /** Cap spoken replies; a paragraph read aloud is already a long answer. */
-    val shorterSpokenReplies: Boolean = true
+    val pitch: Float = 0.96f,
+    val rate: Float = 0.98f
 ) {
     companion object {
         val PITCH_RANGE = 0.7f..1.3f

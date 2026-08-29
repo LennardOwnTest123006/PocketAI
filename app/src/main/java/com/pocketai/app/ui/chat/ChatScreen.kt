@@ -46,8 +46,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.activity.compose.BackHandler
-import androidx.compose.material.icons.outlined.RecordVoiceOver
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -80,7 +78,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.pocketai.app.ui.speak.SpeakModeOverlay
 import com.pocketai.app.data.repo.ChatMessage
 import com.pocketai.app.data.repo.Conversation
 import com.pocketai.app.llm.ResponseMode
@@ -101,6 +98,7 @@ fun ChatScreen(
     val conversations by viewModel.conversations.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val searchResults by viewModel.searchResults.collectAsStateWithLifecycle()
+    val readerState by viewModel.readerState.collectAsStateWithLifecycle()
 
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -118,7 +116,6 @@ fun ChatScreen(
     var renameTarget by remember { mutableStateOf<Conversation?>(null) }
     var deleteTarget by remember { mutableStateOf<Conversation?>(null) }
     var overflowOpen by remember { mutableStateOf(false) }
-    var speakMode by remember { mutableStateOf(false) }
 
     fun copy(text: String) {
         clipboard.setText(AnnotatedString(text))
@@ -156,6 +153,15 @@ fun ChatScreen(
         if (text != null) {
             snackbarHost.showSnackbar(text)
             viewModel.clearError()
+        }
+    }
+
+    // A missing voice for a language is worth saying out loud once, rather than
+    // the read-aloud button silently doing nothing.
+    LaunchedEffect(readerState.notice) {
+        readerState.notice?.let {
+            snackbarHost.showSnackbar(it)
+            viewModel.clearReaderNotice()
         }
     }
 
@@ -217,14 +223,6 @@ fun ChatScreen(
                         }
                     },
                     actions = {
-                        if (viewModel.speakRecognitionAvailable) {
-                            IconButton(onClick = { speakMode = true }) {
-                                Icon(
-                                    Icons.Outlined.RecordVoiceOver,
-                                    contentDescription = "Speak with PocketAI"
-                                )
-                            }
-                        }
                         IconButton(onClick = viewModel::newChat) {
                             Icon(Icons.Filled.Add, contentDescription = "New chat")
                         }
@@ -356,7 +354,9 @@ fun ChatScreen(
                                 showSources = settings.showSources,
                                 onCopy = ::copy,
                                 onShare = ::share,
-                                onOpenActions = { actionTarget = message }
+                                onOpenActions = { actionTarget = message },
+                                speaking = readerState.isSpeaking(message.id),
+                                onReadAloud = { viewModel.toggleReadAloud(message) }
                             )
                         }
                         uiState.streaming?.let { streaming ->
@@ -471,14 +471,6 @@ fun ChatScreen(
             onDismiss = { deleteTarget = null },
             onConfirm = { viewModel.deleteConversation(conversation.id) }
         )
-    }
-
-    // Drawn last so it covers the chat completely. The conversation underneath
-    // keeps updating, so closing Speak Mode leaves the spoken exchange in place
-    // to scroll back through.
-    if (speakMode) {
-        SpeakModeOverlay(viewModel = viewModel, onClose = { speakMode = false })
-        BackHandler { viewModel.stopSpeakMode(); speakMode = false }
     }
 }
 

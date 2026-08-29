@@ -222,22 +222,18 @@ fun PrivacyScreen(viewModel: PrivacyViewModel, onBack: () -> Unit) {
                     )
                     PrivacyPoint(
                         icon = Icons.Outlined.Mic,
-                        title = "Voice input and Speak Mode",
-                        body = "The microphone is used only while you are dictating or Speak Mode " +
-                            "is running, and audio is never recorded to storage or sent anywhere " +
-                            "by PocketAI. Transcription itself is done by Android's speech " +
-                            "recognition: PocketAI asks for the on-device recogniser and, with " +
-                            "\"on-device only\" enabled in Speak Mode settings, will not fall back " +
-                            "to one that uploads audio. Some devices and languages have no offline " +
-                            "recogniser installed, in which case Android may process the audio in " +
-                            "the cloud - Speak Mode tells you which one it is using."
+                        title = "Voice input",
+                        body = "PocketAI holds no microphone permission. Dictation opens " +
+                            "Android's own speech recogniser, which handles the audio under its " +
+                            "own permission and hands PocketAI only the finished text."
                     )
                     PrivacyPoint(
                         icon = Icons.Outlined.Mic,
-                        title = "Spoken replies",
+                        title = "Reading answers aloud",
                         body = "Speech is produced by the text-to-speech engine already on your " +
-                            "phone. PocketAI prefers voices that work offline; a voice marked as " +
-                            "needing a network is reported to you rather than used silently."
+                            "phone. It is synthesis only - nothing is recorded or listened to. " +
+                            "PocketAI prefers voices that work offline; a voice that needs a " +
+                            "network is reported to you rather than used silently."
                     )
                 }
             }

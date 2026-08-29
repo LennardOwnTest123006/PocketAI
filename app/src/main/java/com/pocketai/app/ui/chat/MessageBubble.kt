@@ -38,6 +38,8 @@ import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.Psychology
 import androidx.compose.material3.Icon
+import androidx.compose.material.icons.outlined.StopCircle
+import androidx.compose.material.icons.outlined.VolumeUp
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -78,6 +80,9 @@ fun MessageBubble(
     onCopy: (String) -> Unit,
     onShare: (String) -> Unit,
     onOpenActions: () -> Unit,
+    /** True while this answer is being read out loud. */
+    speaking: Boolean = false,
+    onReadAloud: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val style = LocalChatStyle.current
@@ -167,7 +172,10 @@ fun MessageBubble(
                 MessageActionBar(
                     alignEnd = false,
                     onCopy = { onCopy(message.content) },
-                    onOpenActions = onOpenActions
+                    onOpenActions = onOpenActions,
+                    // Only finished, non-error answers are worth reading out.
+                    onReadAloud = if (message.isError) null else onReadAloud,
+                    speaking = speaking
                 )
             }
         }
@@ -179,13 +187,27 @@ fun MessageBubble(
 private fun MessageActionBar(
     alignEnd: Boolean,
     onCopy: () -> Unit,
-    onOpenActions: () -> Unit
+    onOpenActions: () -> Unit,
+    onReadAloud: (() -> Unit)? = null,
+    speaking: Boolean = false
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = if (alignEnd) Arrangement.End else Arrangement.Start,
         verticalAlignment = Alignment.CenterVertically
     ) {
+        if (onReadAloud != null) {
+            IconButton(onClick = onReadAloud, modifier = Modifier.size(32.dp)) {
+                Icon(
+                    if (speaking) Icons.Outlined.StopCircle else Icons.Outlined.VolumeUp,
+                    contentDescription = if (speaking) "Stop reading" else "Read aloud",
+                    // Tinted while speaking so it is obvious which answer is playing.
+                    tint = if (speaking) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(17.dp)
+                )
+            }
+        }
         IconButton(onClick = onCopy, modifier = Modifier.size(32.dp)) {
             Icon(
                 Icons.Outlined.ContentCopy,

@@ -85,13 +85,10 @@ class SettingsRepository(private val context: Context) {
         val localOnlyMode = booleanPreferencesKey("local_only_mode")
         val showPerformanceStats = booleanPreferencesKey("show_perf_stats")
 
-        val speakAutoDetect = booleanPreferencesKey("speak_auto_detect")
-        val speakLanguage = stringPreferencesKey("speak_language")
-        val speakPitch = floatPreferencesKey("speak_pitch")
-        val speakRate = floatPreferencesKey("speak_rate")
-        val speakOnDeviceOnly = booleanPreferencesKey("speak_on_device_only")
-        val speakContinuous = booleanPreferencesKey("speak_continuous")
-        val speakShorterReplies = booleanPreferencesKey("speak_shorter_replies")
+        val voiceDetectLanguage = booleanPreferencesKey("voice_detect_language")
+        val voiceLanguage = stringPreferencesKey("voice_language")
+        val voicePitch = floatPreferencesKey("voice_pitch")
+        val voiceRate = floatPreferencesKey("voice_rate")
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data
@@ -156,14 +153,11 @@ class SettingsRepository(private val context: Context) {
                 showSources = p[Keys.showSources] ?: true,
                 localOnlyMode = p[Keys.localOnlyMode] ?: false,
                 showPerformanceStats = p[Keys.showPerformanceStats] ?: true,
-                speak = SpeakSettings(
-                    autoDetectLanguage = p[Keys.speakAutoDetect] ?: false,
-                    languageTag = p[Keys.speakLanguage] ?: "",
-                    voicePitch = p[Keys.speakPitch] ?: defaults.speak.voicePitch,
-                    voiceRate = p[Keys.speakRate] ?: defaults.speak.voiceRate,
-                    onDeviceRecognitionOnly = p[Keys.speakOnDeviceOnly] ?: false,
-                    continuousConversation = p[Keys.speakContinuous] ?: true,
-                    shorterSpokenReplies = p[Keys.speakShorterReplies] ?: true
+                voice = VoiceSettings(
+                    detectLanguage = p[Keys.voiceDetectLanguage] ?: true,
+                    languageTag = p[Keys.voiceLanguage] ?: "",
+                    pitch = p[Keys.voicePitch] ?: defaults.voice.pitch,
+                    rate = p[Keys.voiceRate] ?: defaults.voice.rate
                 )
             )
         }
@@ -239,17 +233,14 @@ class SettingsRepository(private val context: Context) {
     }
     suspend fun setShowPerformanceStats(v: Boolean) = edit { it[Keys.showPerformanceStats] = v }
 
-    suspend fun setSpeakAutoDetect(v: Boolean) = edit { it[Keys.speakAutoDetect] = v }
-    suspend fun setSpeakLanguage(tag: String) = edit { it[Keys.speakLanguage] = tag }
-    suspend fun setSpeakPitch(v: Float) = edit {
-        it[Keys.speakPitch] = v.coerceIn(SpeakSettings.PITCH_RANGE)
+    suspend fun setVoiceDetectLanguage(v: Boolean) = edit { it[Keys.voiceDetectLanguage] = v }
+    suspend fun setVoiceLanguage(tag: String) = edit { it[Keys.voiceLanguage] = tag }
+    suspend fun setVoicePitch(v: Float) = edit {
+        it[Keys.voicePitch] = v.coerceIn(VoiceSettings.PITCH_RANGE)
     }
-    suspend fun setSpeakRate(v: Float) = edit {
-        it[Keys.speakRate] = v.coerceIn(SpeakSettings.RATE_RANGE)
+    suspend fun setVoiceRate(v: Float) = edit {
+        it[Keys.voiceRate] = v.coerceIn(VoiceSettings.RATE_RANGE)
     }
-    suspend fun setSpeakOnDeviceOnly(v: Boolean) = edit { it[Keys.speakOnDeviceOnly] = v }
-    suspend fun setSpeakContinuous(v: Boolean) = edit { it[Keys.speakContinuous] = v }
-    suspend fun setSpeakShorterReplies(v: Boolean) = edit { it[Keys.speakShorterReplies] = v }
 
     suspend fun resetAppearance() = edit {
         listOf(

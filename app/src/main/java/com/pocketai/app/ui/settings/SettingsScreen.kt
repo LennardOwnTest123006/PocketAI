@@ -46,7 +46,7 @@ import com.pocketai.app.BuildConfig
 import com.pocketai.app.core.DeviceCapabilities
 import com.pocketai.app.core.PerformanceMode
 import com.pocketai.app.data.model.ModelRepository
-import com.pocketai.app.data.repo.SpeakSettings
+import com.pocketai.app.data.repo.VoiceSettings
 import com.pocketai.app.data.repo.AnimationLevel
 import com.pocketai.app.data.repo.CodeTheme
 import com.pocketai.app.data.repo.DarkModePreference
@@ -274,50 +274,40 @@ fun SettingsScreen(
 
             // ---------------------------------------------------- Appearance
             item {
-                SettingsSection("Speak Mode") {
+                SettingsSection("PocketAI's voice") {
                     SettingsSwitch(
-                        title = "Answer in the language I speak",
-                        subtitle = "PocketAI detects the language of each spoken turn and " +
-                            "replies in it. Turn off to always use the language you pick in " +
-                            "Speak Mode.",
-                        checked = settings.speak.autoDetectLanguage,
-                        onChange = { scope.launch { prefs.setSpeakAutoDetect(it) } }
-                    )
-                    SettingsSwitch(
-                        title = "Shorter spoken answers",
-                        subtitle = "A written answer can be skimmed; a spoken one has to be " +
-                            "sat through. Keeps replies to roughly a minute.",
-                        checked = settings.speak.shorterSpokenReplies,
-                        onChange = { scope.launch { prefs.setSpeakShorterReplies(it) } }
-                    )
-                    SettingsSwitch(
-                        title = "On-device speech recognition only",
-                        subtitle = "Speak Mode always prefers the on-device recogniser. With " +
-                            "this off, it falls back to online recognition (and tells you) when " +
-                            "your phone has no offline pack for a language. Turn it on to refuse " +
-                            "that fallback and keep every word on the device.",
-                        checked = settings.speak.onDeviceRecognitionOnly,
-                        onChange = { scope.launch { prefs.setSpeakOnDeviceOnly(it) } }
+                        title = "Detect the answer's language",
+                        subtitle = "PocketAI works out which language it replied in and reads " +
+                            "it with that language's voice. Turn off to always read in the " +
+                            "language chosen below.",
+                        checked = settings.voice.detectLanguage,
+                        onChange = { scope.launch { prefs.setVoiceDetectLanguage(it) } }
                     )
                     SettingsSlider(
                         title = "Voice pitch",
-                        value = settings.speak.voicePitch,
-                        range = SpeakSettings.PITCH_RANGE,
+                        value = settings.voice.pitch,
+                        range = VoiceSettings.PITCH_RANGE,
                         format = { "%.2f".format(it) },
-                        onChange = { scope.launch { prefs.setSpeakPitch(it) } }
+                        onChange = { scope.launch { prefs.setVoicePitch(it) } }
                     )
                     SettingsSlider(
                         title = "Speaking rate",
-                        value = settings.speak.voiceRate,
-                        range = SpeakSettings.RATE_RANGE,
+                        value = settings.voice.rate,
+                        range = VoiceSettings.RATE_RANGE,
                         format = { "%.2f".format(it) },
-                        onChange = { scope.launch { prefs.setSpeakRate(it) } }
+                        onChange = { scope.launch { prefs.setVoiceRate(it) } }
                     )
                     SettingsRow(
-                        title = "Voices and offline languages",
-                        subtitle = "PocketAI uses the voices Android has installed and picks " +
-                            "the best offline one for each language. Add or download voices " +
-                            "in Android's own text-to-speech settings."
+                        title = "Hear the voice",
+                        subtitle = "Play a sample with the current pitch and speed.",
+                        onClick = { viewModel.previewVoice() }
+                    )
+                    SettingsRow(
+                        title = "Voices and languages",
+                        subtitle = "PocketAI picks the best voice your phone has for each " +
+                            "language, preferring ones that work offline, and keeps the same " +
+                            "pitch and pace everywhere so it sounds like itself in every " +
+                            "language. Add languages in Android's text-to-speech settings."
                     )
                 }
 
